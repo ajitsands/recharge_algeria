@@ -18,37 +18,96 @@ class Database {
 
         // Attempt MySQL
         if ($mode === 'mysql' || $mode === 'auto') {
-            try {
-                $my = $dbConfig['mysql'];
-                // Connect without dbname first to ensure database exists
-                $initDsn = "mysql:host={$my['host']};port={$my['port']};charset={$my['charset']}";
-                $initPdo = new PDO($initDsn, $my['username'], $my['password'], [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_TIMEOUT => 3
-                ]);
-                $initPdo->exec("CREATE DATABASE IF NOT EXISTS `{$my['database']}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+            $my = $dbConfig['mysql'];
 
-                // Now connect to database
-                $dsn = "mysql:host={$my['host']};port={$my['port']};dbname={$my['database']};charset={$my['charset']}";
-                $pdo = new PDO($dsn, $my['username'], $my['password'], [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_TIMEOUT => 3
-                ]);
+            // Build candidate profiles (primary, server profile, local root profile)
+            $profiles = [];
+            
+            // 1. Configured profile
+            $profiles[] = [
+                'host' => $my['host'],
+                'port' => $my['port'] ?? 3306,
+                'database' => $my['database'],
+                'username' => $my['username'],
+                'password' => $my['password'],
+                'charset' => $my['charset'] ?? 'utf8mb4'
+            ];
 
-                // Check if tables exist, if not run schema and seed
-                $checkTable = $pdo->query("SHOW TABLES LIKE 'operators'")->fetch();
-                if (!$checkTable) {
-                    self::initializeMySqlDatabase($pdo);
+            // 2. Server credentials explicit fallback
+            $profiles[] = [
+                'host' => 'localhost',
+                'port' => 3306,
+                'database' => 'teamtoob_algeria_recharge_db',
+                'username' => 'teamtoob_algeria_recharge_user',
+                'password' => 'S@nds1@b',
+                'charset' => 'utf8mb4'
+            ];
+
+            // 3. Local root fallback
+            $profiles[] = [
+                'host' => '127.0.0.1',
+                'port' => 3306,
+                'database' => 'algeria_recharge',
+                'username' => 'root',
+                'password' => 'S@nds1@b',
+                'charset' => 'utf8mb4'
+            ];
+
+            $lastErr = null;
+            foreach ($profiles as $prof) {
+                try {
+                    $dsn = "mysql:host={$prof['host']};port={$prof['port']};dbname={$prof['database']};charset={$prof['charset']}";
+                    $pdo = new PDO($dsn, $prof['username'], $prof['password'], [
+                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                        PDO::ATTR_TIMEOUT => 3
+                    ]);
+
+                    // Verify tables exist; if database is newly imported or empty, initialize
+                    $checkTable = $pdo->query("SHOW TABLES LIKE 'operators'")->fetch();
+                    if (!$checkTable) {
+                        self::initializeMySqlDatabase($pdo);
+                    }
+
+                    self::$instance = $pdo;
+                    self::$driver = 'mysql';
+                    return self::$instance;
+                } catch (Throwable $e) {
+                    $lastErr = $e;
+                    // On local root, if database doesn't exist, try creating it
+                    if (($prof['username'] === 'root' || $prof['host'] === '127.0.0.1') && 
+                        (strpos($e->getMessage(), 'Unknown database') !== false || strpos($e->getMessage(), '1049') !== false)) {
+                        try {
+                            $initDsn = "mysql:host={$prof['host']};port={$prof['port']};charset={$prof['charset']}";
+                            $initPdo = new PDO($initDsn, $prof['username'], $prof['password'], [
+                                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                                PDO::ATTR_TIMEOUT => 3
+                            ]);
+                            $initPdo->exec("CREATE DATABASE IF NOT EXISTS `{$prof['database']}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+
+                            $dsn = "mysql:host={$prof['host']};port={$prof['port']};dbname={$prof['database']};charset={$prof['charset']}";
+                            $pdo = new PDO($dsn, $prof['username'], $prof['password'], [
+                                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                                PDO::ATTR_TIMEOUT => 3
+                            ]);
+                            $checkTable = $pdo->query("SHOW TABLES LIKE 'operators'")->fetch();
+                            if (!$checkTable) {
+                                self::initializeMySqlDatabase($pdo);
+                            }
+                            self::$instance = $pdo;
+                            self::$driver = 'mysql';
+                            return self::$instance;
+                        } catch (Throwable $e2) {
+                            $lastErr = $e2;
+                        }
+                    }
+                    continue; // try next candidate profile
                 }
+            }
 
-                self::$instance = $pdo;
-                self::$driver = 'mysql';
-                return self::$instance;
-            } catch (Throwable $e) {
-                if ($mode === 'mysql') {
-                    throw new Exception("MySQL Connection Failed (host: {$my['host']}, user: {$my['username']}): " . $e->getMessage());
-                }
+            if ($mode === 'mysql') {
+                throw new Exception("MySQL Connection Failed: " . ($lastErr ? $lastErr->getMessage() : 'No connection profile succeeded'));
             }
         }
 
