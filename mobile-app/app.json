@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Razik Telecom",
+    "slug": "razik-telecom-algeria",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#008a3e"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dz.raziktelecom.mobile"
+    },
+    "android": {
+      "package": "dz.raziktelecom.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#008a3e"
+      },
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

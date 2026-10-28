@@ -1,0 +1,986 @@
+import os
+
+html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Razik Telecom - Commercial & Technical Project Proposal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  @page {
+    size: A4;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
+    line-height: 1.42;
+    font-size: 8.5pt;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  /* Structural Rules */
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  .avoid-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Cover Page */
+  .cover-page {
+    height: 100vh;
+    min-height: 255mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    page-break-after: always;
+    padding: 8mm 4mm 4mm 4mm;
+  }
+
+  .cover-top {
+    border-bottom: 3px solid #006233;
+    padding-bottom: 14px;
+  }
+
+  .brand-tag {
+    font-size: 13pt;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #006233;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .brand-tag span.badge-algeria {
+    background: #D21034;
+    color: #fff;
+    font-size: 7.5pt;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .cover-title {
+    font-size: 26pt;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.15;
+    margin: 10px 0 6px 0;
+  }
+
+  .cover-subtitle {
+    font-size: 11.5pt;
+    font-weight: 500;
+    color: #475569;
+    margin-bottom: 12px;
+  }
+
+  .cover-meta-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    background: #f8fafc;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+  }
+
+  .cover-meta-table th {
+    background: #1e293b;
+    color: #f8fafc;
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 700;
+  }
+
+  .cover-meta-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 8.5pt;
+  }
+
+  .cover-meta-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .cover-meta-table td.field-name {
+    font-weight: 600;
+    color: #334155;
+    width: 32%;
+    background: #f1f5f9;
+  }
+
+  .cover-meta-table td.field-val {
+    color: #0f172a;
+  }
+
+  .cover-highlight-card {
+    background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 100%);
+    border-left: 4px solid #006233;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 8.5pt;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #006233;
+  }
+
+  .cover-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-top: 1px solid #cbd5e1;
+    padding-top: 12px;
+    font-size: 7.5pt;
+    color: #64748b;
+  }
+
+  .cover-footer .engineer-stamp {
+    font-weight: 700;
+    color: #0f172a;
+    text-align: right;
+  }
+
+  h1, h2, h3, h4 {
+    color: #0f172a;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  h1 {
+    font-size: 13pt;
+    font-weight: 800;
+    border-bottom: 2px solid #006233;
+    padding-bottom: 3px;
+    margin-top: 10px;
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+  }
+
+  h2 {
+    font-size: 10pt;
+    font-weight: 700;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    color: #1e293b;
+  }
+
+  p {
+    margin: 0 0 6px 0;
+    text-align: justify;
+  }
+
+  ul, ol {
+    margin: 0 0 6px 0;
+    padding-left: 16px;
+  }
+
+  li {
+    margin-bottom: 2px;
+  }
+
+  /* Tables */
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6px 0 10px 0;
+    font-size: 7.8pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    border: 1px solid #cbd5e1;
+  }
+
+  table.data-table th {
+    background: #1e293b;
+    color: #ffffff;
+    font-weight: 600;
+    text-align: left;
+    padding: 5px 7px;
+    border: 1px solid #334155;
+    letter-spacing: 0.2px;
+  }
+
+  table.data-table td {
+    padding: 4px 7px;
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+
+  table.data-table tr:nth-child(even) {
+    background: #f8fafc;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 6.8pt;
+    font-weight: 700;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .badge-success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .badge-warning { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+  .badge-danger  { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+  .badge-info    { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+
+  /* Callouts */
+  .callout {
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin: 6px 0;
+    font-size: 8pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .callout-info {
+    background: #f0fdf4;
+    border-left: 3px solid #006233;
+    color: #166534;
+  }
+
+  .callout-quote {
+    background: #f8fafc;
+    border-left: 3px solid #2563eb;
+    color: #1e293b;
+  }
+
+  /* Architecture Diagram Container */
+  .diagram-container {
+    background: #0f172a;
+    color: #f8fafc;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .diagram-title {
+    font-size: 8pt;
+    font-weight: 700;
+    color: #38bdf8;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+
+  .diag-box {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+  }
+
+  .diag-box-title {
+    font-weight: 700;
+    font-size: 7pt;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 2px;
+  }
+
+  .diag-grid {
+    display: flex;
+    gap: 5px;
+    justify-content: space-between;
+  }
+
+  .diag-cell {
+    flex: 1;
+    background: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-size: 7.2pt;
+    text-align: center;
+    color: #f1f5f9;
+  }
+
+  .diag-cell.accent-green { border-color: #22c55e; color: #4ade80; }
+  .diag-cell.accent-red   { border-color: #ef4444; color: #f87171; }
+  .diag-cell.accent-blue  { border-color: #38bdf8; color: #7dd3fc; }
+
+  .diag-arrow {
+    text-align: center;
+    color: #64748b;
+    font-size: 8pt;
+    margin: 1px 0;
+  }
+
+  /* Signature Box */
+  .signature-grid {
+    display: flex;
+    gap: 14px;
+    margin-top: 10px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .signature-box {
+    flex: 1;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    padding: 10px 12px;
+    background: #f8fafc;
+  }
+
+  .signature-box h4 {
+    margin: 0 0 6px 0;
+    font-size: 8pt;
+    color: #0f172a;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 3px;
+  }
+
+  .sign-line {
+    border-bottom: 1px dashed #94a3b8;
+    height: 28px;
+    margin: 6px 0 3px 0;
+  }
+
+  .sign-label {
+    font-size: 7pt;
+    color: #64748b;
+  }
+
+  /* Running Header */
+  .header-running {
+    display: flex;
+    justify-content: space-between;
+    font-size: 6.8pt;
+    color: #94a3b8;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 2px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1: COVER PAGE -->
+<div class="cover-page">
+  <div class="cover-top">
+    <div class="brand-tag">
+      RAZIK TELECOM
+      <span class="badge-algeria">ALGIERS, ALGERIA</span>
+    </div>
+    <div class="cover-title">Commercial & Technical Project Proposal</div>
+    <div class="cover-subtitle">Turnkey Telecom Credit Distribution ERP & Multi-Channel POS Platform</div>
+    
+    <div class="callout callout-info">
+      <strong>Scope Reference:</strong> Grounded in <code>docs/Razik_Telecom_Detailed_ERP_Scoping_Report_v0.1.pdf</code> and the operational baseline delivered by SaNDS Lab Middle East W.L.L.
+    </div>
+  </div>
+
+  <table class="cover-meta-table">
+    <thead>
+      <tr>
+        <th colspan="2">Document Metadata & Project Baseline</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="field-name">Document Code</td>
+        <td class="field-val"><strong>PROP-RAZIK-2026-V1</strong></td>
+      </tr>
+      <tr>
+        <td class="field-name">Date of Proposal</td>
+        <td class="field-val">October 28, 2026</td>
+      </tr>
+      <tr>
+        <td class="field-name">Prepared For</td>
+        <td class="field-val"><strong>Razik Telecom</strong> (Owner & Management)</td>
+      </tr>
+      <tr>
+        <td class="field-name">Prepared By</td>
+        <td class="field-val"><strong>SaNDS Lab Middle East W.L.L</strong> (Engineering & Architecture)</td>
+      </tr>
+      <tr>
+        <td class="field-name">Geographic Scope</td>
+        <td class="field-val">Algiers & Surrounding Wilayas, Algeria</td>
+      </tr>
+      <tr>
+        <td class="field-name">Telecom Operators</td>
+        <td class="field-val">Mobilis (ATM), Djezzy (OTA), Ooredoo (WTA)</td>
+      </tr>
+      <tr>
+        <td class="field-name">Target Solution Channels</td>
+        <td class="field-val">Android Mobile APK, Widescreen 1920px Web Portal, Windows POS Terminal</td>
+      </tr>
+      <tr>
+        <td class="field-name">Classification</td>
+        <td class="field-val"><span class="badge badge-warning">Commercial-in-Confidence</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="cover-highlight-card">
+    <strong>Executive Proposition:</strong> This proposal presents the complete turnkey plan to transform Razik Telecom from an owner-dependent manual recharge operation into an automated, auditable, high-concurrency distribution switch. The system provides retail agents with sub-3-second automated recharges, ensures 100% financial control over post-sale credit and instalment collections, and establishes an extensible foundation for bill utilities and B2B electronics commerce.
+  </div>
+
+  <div class="cover-footer">
+    <div>
+      <div>Razik Telecom ERP Modernization Initiative</div>
+      <div>Confidential &copy; 2026 Razik Telecom & SaNDS Lab Middle East W.L.L</div>
+    </div>
+    <div class="engineer-stamp">
+      SaNDS Lab Middle East W.L.L<br>
+      <span style="font-size: 7.5pt; font-weight: normal; color: #64748b;">Enterprise Systems Engineering</span>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 2: EXEC SUMMARY & PAIN POINTS -->
+<div class="page-break"></div>
+<div class="header-running">
+  <span>Razik Telecom - Commercial & Technical Proposal</span>
+  <span>PROP-RAZIK-2026-V1</span>
+</div>
+
+<h1>1. Executive Summary & Strategic Context</h1>
+
+<h2>1.1 Market Context & Client Profile</h2>
+<p>
+  <strong>Razik Telecom</strong> is an established B2B telecom credit distributor operating in Algiers, Algeria. The company purchases bulk wholesale mobile airtime and data packages from the three national licensed operators—<strong>Mobilis</strong> (06), <strong>Djezzy</strong> (07), and <strong>Ooredoo</strong> (05)—and distributes them to a broad network of approved retail agents including phone kiosks, cybercafés, neighborhood mini-markets, and multi-service shops.
+</p>
+<p>
+  The current operating model relies on the owner directly handling transaction approvals, credit provisioning, and physical cash collection under post-sale instalment agreements. While this has fostered close client relationships, it imposes significant operational ceilings on volume, speed, and financial control.
+</p>
+
+<h2>1.2 Current Operational Ceilings & Pain Points</h2>
+<table class="data-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">ID</th>
+      <th style="width: 28%;">Current Operational Bottleneck</th>
+      <th style="width: 45%;">Business Risk & Operational Impact</th>
+      <th style="width: 15%;">Severity</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>PP-01</strong></td>
+      <td>Manual Owner Intervention</td>
+      <td>Transaction delays of 2–5 minutes; inability to handle peak evening recharge surges; limits total daily revenue.</td>
+      <td><span class="badge badge-danger">CRITICAL</span></td>
+    </tr>
+    <tr>
+      <td><strong>PP-02</strong></td>
+      <td>Manual Operator Selection</td>
+      <td>Retailers or dispatcher misidentify operator prefixes, leading to misrouted airtime and lost funds.</td>
+      <td><span class="badge badge-warning">HIGH</span></td>
+    </tr>
+    <tr>
+      <td><strong>PP-03</strong></td>
+      <td>Informal Post-Sale Credit & Ageing</td>
+      <td>Lack of automated credit caps allows agent receivables to exceed recoverable limits without automated warning.</td>
+      <td><span class="badge badge-danger">CRITICAL</span></td>
+    </tr>
+    <tr>
+      <td><strong>PP-04</strong></td>
+      <td>Physical Cash Collection Discrepancies</td>
+      <td>Collections performed on the road lack instantaneous numbered digital receipts, creating reconciliation friction.</td>
+      <td><span class="badge badge-warning">HIGH</span></td>
+    </tr>
+    <tr>
+      <td><strong>PP-05</strong></td>
+      <td>Operator Balance Visibility Gaps</td>
+      <td>Lack of real-time low-balance alerts results in sudden stockouts and failed recharge attempts.</td>
+      <td><span class="badge badge-warning">HIGH</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>1.3 Strategic Solution Vision</h2>
+<p>
+  <strong>SaNDS Lab Middle East W.L.L</strong> has architected the <em>Razik Telecom Platform</em> to transition operations from manual dispatching to an <strong>automated, auditable, high-concurrency transaction switch</strong>:
+</p>
+<ul>
+  <li><strong>Instant Sub-3-Second Recharges:</strong> Retailers submit recharge requests via Android APK or Web POS; the engine auto-identifies the operator via prefix, validates dealer limits, deducts the wholesale net, and executes the recharge automatically.</li>
+  <li><strong>Double-Entry Ledger & Credit Control:</strong> Configurable hard/soft credit limits, automated ageing buckets, and instalment plans with automatic temporary suspension of delinquent retailers.</li>
+  <li><strong>Numbered Digital Cash Collection Receipts:</strong> Field cash collectors issue digitally signed, sequential receipts allocated directly against the oldest pending receivables.</li>
+  <li><strong>Widescreen 1920px Operations Center:</strong> Comprehensive real-time monitoring of wholesale balances, dealer approvals, live margins, and one-click dispute resolution.</li>
+</ul>
+
+<!-- PAGE 3: OBJECTIVES & SYSTEM ARCHITECTURE -->
+<div class="page-break"></div>
+<div class="header-running">
+  <span>Razik Telecom - Commercial & Technical Proposal</span>
+  <span>PROP-RAZIK-2026-V1</span>
+</div>
+
+<h1>2. Strategic Objectives & Success Metrics</h1>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th style="width: 24%;">Metric / Domain</th>
+      <th style="width: 24%;">Current Manual Baseline</th>
+      <th style="width: 24%;">Target With Razik ERP</th>
+      <th style="width: 28%;">Quantifiable Business Impact</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Transaction Turnaround</strong></td>
+      <td>2 – 5 minutes (manual delay)</td>
+      <td><strong>&lt; 3 seconds</strong> (automated)</td>
+      <td><strong>50x throughput capacity;</strong> zero manual intervention for standard recharges.</td>
+    </tr>
+    <tr>
+      <td><strong>Prefix Accuracy</strong></td>
+      <td>Human selection error (~3%)</td>
+      <td><strong>100% automated mapping</strong></td>
+      <td>Zero misrouted transactions across 06 (Mobilis), 07 (Djezzy), 05 (Ooredoo).</td>
+    </tr>
+    <tr>
+      <td><strong>Bad Debt Exposure</strong></td>
+      <td>Informal balance accumulation</td>
+      <td><strong>Automated Credit Hard Stop</strong></td>
+      <td>System locks sales when overdue thresholds or credit limits are breached.</td>
+    </tr>
+    <tr>
+      <td><strong>Cash Collection Audit</strong></td>
+      <td>Manual paper / WhatsApp notes</td>
+      <td><strong>Sequential Digital Receipts</strong></td>
+      <td>100% verifiable collection audit trail with collector attribution.</td>
+    </tr>
+    <tr>
+      <td><strong>Service Availability</strong></td>
+      <td>Periodic stockout surprises</td>
+      <td><strong>Live Multi-Threshold Alerts</strong></td>
+      <td>Automatic low-balance warning (20%) and emergency top-up notifications.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h1>3. System Architecture & Topology</h1>
+
+<div class="diagram-container">
+  <div class="diagram-title">Razik Telecom Multi-Channel Enterprise Platform Architecture</div>
+  
+  <div class="diag-box">
+    <div class="diag-box-title">Client Presentation Layer (Bilingual Arabic RTL / French LTR)</div>
+    <div class="diag-grid">
+      <div class="diag-cell accent-green"><strong>Dealer Android APK</strong><br>Mobile POS, Offline Cache, Bluetooth Thermal</div>
+      <div class="diag-cell accent-blue"><strong>Dealer Web Terminal</strong><br>Desktop Web POS, Margin Calc</div>
+      <div class="diag-cell accent-red"><strong>Admin Operations Console</strong><br>1920px Widescreen, Live Quotas, KYC & Disputes</div>
+    </div>
+  </div>
+
+  <div class="diag-arrow">&darr; &uarr; Secured REST API / TLS 1.3 / JWT Bearer Tokens &darr; &uarr;</div>
+
+  <div class="diag-box">
+    <div class="diag-box-title">Security & Transaction Control Layer</div>
+    <div class="diag-grid">
+      <div class="diag-cell">Idempotency Token Filter</div>
+      <div class="diag-cell">Rate Limiter & Brute Guard</div>
+      <div class="diag-cell">Role-Based Access Control (RBAC)</div>
+      <div class="diag-cell">Immutable Audit Logger</div>
+    </div>
+  </div>
+
+  <div class="diag-arrow">&darr; &uarr; Core Micro-Service Execution Engines &darr; &uarr;</div>
+
+  <div class="diag-box">
+    <div class="diag-box-title">Core ERP & Financial Processing Engine</div>
+    <div class="diag-grid">
+      <div class="diag-cell accent-blue"><strong>Routing & Prefix Engine</strong><br>06/07/05 Mapping</div>
+      <div class="diag-cell accent-green"><strong>Instant Margin Engine</strong><br>Live Commission Discount</div>
+      <div class="diag-cell accent-red"><strong>Credit & Sub-Ledger</strong><br>Instalments & Hard Stops</div>
+      <div class="diag-cell"><strong>Cash Collection Reg</strong><br>Numbered Receipts</div>
+    </div>
+  </div>
+
+  <div class="diag-arrow">&darr; &uarr; Integration & Persistence Layers &darr; &uarr;</div>
+
+  <div class="diag-grid">
+    <div class="diag-cell accent-green" style="flex: 2;">
+      <strong>Telecom Integration Layer</strong><br>
+      Mobilis Gateway (API / Hardware) | Djezzy Gateway | Ooredoo Gateway
+    </div>
+    <div class="diag-cell accent-blue" style="flex: 1.5;">
+      <strong>Enterprise Database</strong><br>
+      MySQL 8.0 ACID Storage + Dual Daily Encrypted Backup
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 4: FUNCTIONAL SCOPE 6 PILLARS (ALL TOGETHER) -->
+<div class="page-break"></div>
+<div class="header-running">
+  <span>Razik Telecom - Commercial & Technical Proposal</span>
+  <span>PROP-RAZIK-2026-V1</span>
+</div>
+
+<h1>4. Functional Scope Breakdown (The 6 Pillars)</h1>
+
+<h2>Pillar 1: Platform Foundation, Identity & Access Control</h2>
+<ul>
+  <li><strong>Self-Service Dealer Registration:</strong> Prospective retailers submit business credentials, commercial registry number (Registre du Commerce), phone number, and store Wilaya location.</li>
+  <li><strong>Owner Approval Gate:</strong> Submitted accounts remain locked in <code>PENDING</code> until the owner verifies identity, assigns initial credit facility, sets commission overrides, and approves activation.</li>
+  <li><strong>Role-Based Access Control (RBAC):</strong> Strict segregation of duties across Super Admin, Kiosk Dealer, Cash Collector, and Support Operator.</li>
+  <li><strong>Enterprise Security:</strong> Session timeout configuration, brute force throttling, password encryption (bcrypt), and complete IP/device audit trail.</li>
+</ul>
+
+<h2>Pillar 2: High-Speed Telecom Recharge Engine</h2>
+<ul>
+  <li><strong>Automatic Prefix Detection:</strong> Analyzes Algerian phone inputs in real-time:
+    <code>06</code> &rarr; <strong>Mobilis</strong> | <code>07</code> &rarr; <strong>Djezzy</strong> | <code>05</code> &rarr; <strong>Ooredoo</strong>.
+  </li>
+  <li><strong>Instant Commission Discount Calculation:</strong>
+    <div class="callout callout-quote">
+      <strong>Live Example:</strong> When a kiosk initiates a <strong>100 DZD</strong> Mobilis recharge with an approved <strong>5.00%</strong> dealer commission rate:<br>
+      &bull; End-Customer Receives: <strong>100 DZD</strong> airtime credit | &bull; Dealer Wallet Debited: <strong>95 DZD</strong> net | &bull; Dealer Retains: <strong>5 DZD</strong> cash profit immediately.
+    </div>
+  </li>
+  <li><strong>Idempotency & Duplicate Protection:</strong> Unique UUID tokens per transaction ensure that double-clicking or network drops never trigger multiple debits or duplicate recharges.</li>
+  <li><strong>Controlled Pending Transaction Queue:</strong> Transactions with delayed operator acknowledgments are placed in an active monitoring queue with auto-retry and manual admin resolution controls.</li>
+</ul>
+
+<h2>Pillar 3: Receivables, Instalments & Physical Cash Collection Sub-Ledger</h2>
+<ul>
+  <li><strong>Double-Entry Ledger:</strong> Every transaction, commission, wallet replenishment, and refund generates an immutable double-entry journal entry with balance snapshots.</li>
+  <li><strong>Instalment Scheduling & Ageing Analysis:</strong> Configurable payment plans with due date tracking; automatic categorization into Current, 30-Day, 60-Day, and 90-Day overdue buckets.</li>
+  <li><strong>Credit Hard/Soft Stops:</strong> Automatic system warnings and conditional transaction locks when an agent exceeds their maximum credit limit or has overdue instalments.</li>
+  <li><strong>Tamper-Proof Cash Collection Register:</strong> Field collectors record cash received on-site; system generates a sequential numbered receipt with automatic allocation against the oldest unpaid invoices.</li>
+</ul>
+
+<h2>Pillar 4: Operator Wholesale Quota Monitoring & Reconciliation</h2>
+<ul>
+  <li><strong>Real-Time Quota Gauges:</strong> Live visual display of Razik Telecom's remaining wholesale balances with Mobilis, Djezzy, and Ooredoo with Warning Level (20%) and Critical Lockout (5%) thresholds.</li>
+  <li><strong>Daily Reconciliation:</strong> End-of-day discrepancy reporting matching operator consumption against internal ledger records.</li>
+</ul>
+
+<h2>Pillar 5: Bilingual User Experience & Multi-Channel Delivery</h2>
+<ul>
+  <li><strong>Native Arabic (RTL) & French/English (LTR):</strong> Contextual localized terminology for Algerian telecom terms (Flexy, Arsselli, Storm, Solde, Versement).</li>
+  <li><strong>1920px Widescreen Desktop Operations Center:</strong> High-density operations dashboard featuring Algerian national emblem and live Algiers digital clock (<code>Africa/Algiers</code>).</li>
+  <li><strong>Android Mobile APK:</strong> Fast, lightweight Android application designed for kiosk counter tablets and smartphones, with support for Bluetooth thermal receipt printers.</li>
+</ul>
+
+<h2>Pillar 6: Future Foundation (Bill Utilities & E-Commerce Ready)</h2>
+<ul>
+  <li><strong>Utility Payment Connectors:</strong> Data model and workflow reservations for <strong>Sonelgaz</strong> (Electricity and Gas bill barcode settlement) and <strong>ADE</strong> (Algérienne Des Eaux water bill processing).</li>
+  <li><strong>Physical Accessories E-Commerce:</strong> Pre-built database hooks for phone accessories (chargers, earphones, screen protectors) including stock tracking and delivery routing.</li>
+</ul>
+
+<!-- PAGE 5: PROOF OF CAPABILITY, ROADMAP & TECH STACK -->
+<div class="page-break"></div>
+<div class="header-running">
+  <span>Razik Telecom - Commercial & Technical Proposal</span>
+  <span>PROP-RAZIK-2026-V1</span>
+</div>
+
+<h1>5. Delivered Working Baseline (Proof of Capability)</h1>
+<p>
+  Unlike traditional software proposals that present abstract concepts, <strong>SaNDS Lab Middle East W.L.L has already engineered and demonstrated a live, functional baseline</strong> directly within the codebase:
+</p>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th style="width: 25%;">Delivered Component</th>
+      <th style="width: 42%;">Implemented Engineering Assets</th>
+      <th style="width: 18%;">Operational Status</th>
+      <th style="width: 15%;">Verification</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Relational Database</strong></td>
+      <td>MySQL 8.0 schema with 9 production tables (<code>users</code>, <code>operators</code>, <code>recharges</code>, <code>wallet_transactions</code>, <code>complaints</code>, etc.).</td>
+      <td><span class="badge badge-success">ACTIVE & SEEDED</span></td>
+      <td>Verified live</td>
+    </tr>
+    <tr>
+      <td><strong>REST API Backend</strong></td>
+      <td>PHP 8.2 API with 8 production endpoints (Stats, Recharge Execution, Dealer Approval, Wallet Adjustments, Refund Resolution).</td>
+      <td><span class="badge badge-success">ACTIVE & TESTED</span></td>
+      <td>Port 8000</td>
+    </tr>
+    <tr>
+      <td><strong>Admin Operations Web Portal</strong></td>
+      <td>React 18 + Vite Widescreen (1920px) dashboard with Algerian national theme, live Algiers clock, and multi-operator quota progress bars.</td>
+      <td><span class="badge badge-success">FUNCTIONAL</span></td>
+      <td>Port 5173</td>
+    </tr>
+    <tr>
+      <td><strong>Dealer POS Simulator</strong></td>
+      <td>Integrated smartphone kiosk simulator with instant commission calculator, auto-prefix detection, and digital receipt generator.</td>
+      <td><span class="badge badge-success">VERIFIED</span></td>
+      <td>Validated live</td>
+    </tr>
+    <tr>
+      <td><strong>Mobile App Codebase</strong></td>
+      <td>React Native / Expo mobile codebase scaffolded in <code>mobile-app/</code> with screen flows and API integration layer.</td>
+      <td><span class="badge badge-info">SCAFFOLD READY</span></td>
+      <td>EAS Build Ready</td>
+    </tr>
+  </tbody>
+</table>
+
+<h1>6. Phased Implementation Roadmap</h1>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">Phase</th>
+      <th style="width: 22%;">Focus Domain</th>
+      <th style="width: 38%;">Key Engineering Deliverables</th>
+      <th style="width: 14%;">Timeline</th>
+      <th style="width: 14%;">Exit Gate</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Phase 0 & 1</strong></td>
+      <td>Discovery & Prototype</td>
+      <td>Current-state workflow mapping, interactive prototype, initial schema, and live POS simulator.</td>
+      <td><span class="badge badge-success">COMPLETED</span></td>
+      <td>Baseline Approved</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 2</strong></td>
+      <td>Gateway Specification</td>
+      <td>Telecom modem gateway / API connectivity specification, high-concurrency database locking, security baseline.</td>
+      <td>Weeks 1 – 2</td>
+      <td>Architecture Lock</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 3</strong></td>
+      <td>Core ERP & Android Build</td>
+      <td>Full instalment sub-ledger, cash collection register, native Android APK compilation, thermal printer integration.</td>
+      <td>Weeks 3 – 7</td>
+      <td>System UAT Passed</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 4</strong></td>
+      <td>Algiers Kiosk Pilot</td>
+      <td>Deployment to 10–15 retail kiosks in Algiers, parallel manual running, stress testing, reconciliation validation.</td>
+      <td>Weeks 8 – 10</td>
+      <td>Pilot Sign-off</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 5</strong></td>
+      <td>Production Launch</td>
+      <td>Full production rollout, owner and staff administration training, user guides (Arabic/French), 90-day warranty start.</td>
+      <td>Weeks 11 – 12</td>
+      <td>Production Live</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 6</strong></td>
+      <td>Commerce Expansion</td>
+      <td>Sonelgaz / ADE utility bill integration and B2B physical accessories inventory catalogue.</td>
+      <td>Post-Launch</td>
+      <td>Add-on Milestone</td>
+    </tr>
+  </tbody>
+</table>
+
+<h1>7. Technical Specifications & Technology Stack</h1>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th style="width: 25%;">Technology Tier</th>
+      <th style="width: 25%;">Selected Platform</th>
+      <th style="width: 50%;">Engineering Rationale</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Backend API Framework</strong></td>
+      <td>PHP 8.2 REST Architecture</td>
+      <td>Ultra-lightweight, native support across local office servers in Algeria, high execution speed, minimal runtime overhead.</td>
+    </tr>
+    <tr>
+      <td><strong>Database Engine</strong></td>
+      <td>MySQL 8.0 Enterprise Relational</td>
+      <td>ACID transactional integrity, row-level locking during high-frequency wallet debits, robust double-entry sub-ledger schema.</td>
+    </tr>
+    <tr>
+      <td><strong>Operations Web Portal</strong></td>
+      <td>React 18 + Vite</td>
+      <td>High responsiveness, native widescreen 1920px multi-monitor support, zero external UI bloat, instant dark/light & RTL switching.</td>
+    </tr>
+    <tr>
+      <td><strong>Dealer Mobile POS</strong></td>
+      <td>React Native / Expo</td>
+      <td>Cross-platform native compilation to Android APK; supports Bluetooth thermal receipt printers and offline status caching.</td>
+    </tr>
+    <tr>
+      <td><strong>Data Security & Privacy</strong></td>
+      <td>TLS 1.3 / AES-256</td>
+      <td>Masked customer phone storage in audit logs, salted bcrypt password security, and operator secret encapsulation.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- PAGE 6: RISKS, RACI, COMMERCIALS & SIGN-OFF -->
+<div class="page-break"></div>
+<div class="header-running">
+  <span>Razik Telecom - Commercial & Technical Proposal</span>
+  <span>PROP-RAZIK-2026-V1</span>
+</div>
+
+<h1>8. Controls, Risk Management & Mitigations</h1>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th style="width: 10%;">ID</th>
+      <th style="width: 25%;">Identified Risk</th>
+      <th style="width: 15%;">Impact</th>
+      <th style="width: 50%;">Engineered Architectural Mitigation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>R-01</strong></td>
+      <td>Timeout During Recharge</td>
+      <td><span class="badge badge-danger">HIGH</span></td>
+      <td><strong>Idempotency Token & Managed Pending Queue:</strong> Recharges are tagged with unique UUIDs. Timeout transactions enter an active pending queue that polls operator status before releasing funds or reversing debits.</td>
+    </tr>
+    <tr>
+      <td><strong>R-02</strong></td>
+      <td>Excessive Retailer Debt</td>
+      <td><span class="badge badge-danger">HIGH</span></td>
+      <td><strong>Automated Credit Limits & Ageing Freeze:</strong> The system automatically blocks recharge access if an agent's balance breaches their approved credit ceiling or if instalments are overdue past agreed grace periods.</td>
+    </tr>
+    <tr>
+      <td><strong>R-03</strong></td>
+      <td>Cash Collection Discrepancy</td>
+      <td><span class="badge badge-warning">MEDIUM</span></td>
+      <td><strong>Sequential Unalterable Receipts:</strong> Every cash collection creates an immutable, sequentially numbered receipt sent to the dealer; errors can only be resolved via counter-signed contra entries.</td>
+    </tr>
+    <tr>
+      <td><strong>R-04</strong></td>
+      <td>Local Server Failure / Outage</td>
+      <td><span class="badge badge-danger">HIGH</span></td>
+      <td><strong>Automated Daily Dual-Backup:</strong> Automated cron tasks perform nightly encrypted database snapshots stored locally and synced to secure off-site cloud storage.</td>
+    </tr>
+    <tr>
+      <td><strong>R-05</strong></td>
+      <td>Ported Number Prefix Misdirection</td>
+      <td><span class="badge badge-warning">MEDIUM</span></td>
+      <td><strong>Manual Operator Override Toggle:</strong> While prefix auto-detection is active by default, the dealer POS interface includes a 1-click operator override if a customer has ported their line.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h1>9. Commercial Investment & Milestone Structure</h1>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th style="width: 10%;">Milestone</th>
+      <th style="width: 54%;">Delivered Work Package & Milestone Criteria</th>
+      <th style="width: 18%;">Target Timeline</th>
+      <th style="width: 18%; text-align: right;">Payment Share</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>M1</strong></td>
+      <td><strong>Contract Execution & Project Kickoff:</strong> Architecture sign-off, scoping lock, environment setup.</td>
+      <td>Week 1</td>
+      <td style="text-align: right;"><strong>20%</strong></td>
+    </tr>
+    <tr>
+      <td><strong>M2</strong></td>
+      <td><strong>Core ERP & Financial Engine:</strong> REST API completion, sub-ledger, cash collection register & web portal.</td>
+      <td>Week 4</td>
+      <td style="text-align: right;"><strong>30%</strong></td>
+    </tr>
+    <tr>
+      <td><strong>M3</strong></td>
+      <td><strong>Mobile POS & Telecom Integration:</strong> Android APK packaging, Bluetooth thermal printing, and routing connectors.</td>
+      <td>Week 8</td>
+      <td style="text-align: right;"><strong>25%</strong></td>
+    </tr>
+    <tr>
+      <td><strong>M4</strong></td>
+      <td><strong>Algiers Field Pilot Sign-off:</strong> Successful 15-kiosk live pilot with verified reconciliations.</td>
+      <td>Week 10</td>
+      <td style="text-align: right;"><strong>15%</strong></td>
+    </tr>
+    <tr>
+      <td><strong>M5</strong></td>
+      <td><strong>Production Launch & Handover:</strong> Live production deployment, staff training, operational guides, warranty start.</td>
+      <td>Week 12</td>
+      <td style="text-align: right;"><strong>10%</strong></td>
+    </tr>
+    <tr style="background: #f1f5f9; font-weight: 700;">
+      <td colspan="3"><strong>Total Turnkey Project Delivery</strong></td>
+      <td style="text-align: right;"><strong>100%</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="avoid-break" style="margin-top: 10px;">
+  <h1>10. Formal Acceptance & Authorization</h1>
+  <p style="font-size: 8pt; margin-bottom: 8px;">
+    By signing below, the parties confirm their agreement to the technical scope, delivery roadmap, and commercial terms set forth in this document.
+  </p>
+
+  <div class="signature-grid">
+    <div class="signature-box">
+      <h4>Authorized for Razik Telecom</h4>
+      <p style="margin: 0; font-size: 7.8pt;"><strong>Name:</strong> Razik Telecom Management</p>
+      <p style="margin: 0; font-size: 7.8pt;"><strong>Title:</strong> Owner & Managing Director</p>
+      <div class="sign-line"></div>
+      <div class="sign-label">Signature & Official Stamp</div>
+      <p style="margin: 4px 0 0 0; font-size: 7.2pt; color: #64748b;"><strong>Date:</strong> _____ / _____ / 2026</p>
+    </div>
+
+    <div class="signature-box">
+      <h4>Authorized for SaNDS Lab Middle East W.L.L</h4>
+      <p style="margin: 0; font-size: 7.8pt;"><strong>Name:</strong> Lead Enterprise Architect</p>
+      <p style="margin: 0; font-size: 7.8pt;"><strong>Title:</strong> Engineering Delivery Director</p>
+      <div class="sign-line"></div>
+      <div class="sign-label">Signature & Official Stamp</div>
+      <p style="margin: 4px 0 0 0; font-size: 7.2pt; color: #64748b;"><strong>Date:</strong> _____ / _____ / 2026</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
+"""
+
+with open("proposal_print.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+print("HTML template synchronized with 6-page layout.")
