@@ -60,7 +60,8 @@ class Database {
                     $pdo = new PDO($dsn, $prof['username'], $prof['password'], [
                         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                        PDO::ATTR_TIMEOUT => 3
+                        PDO::ATTR_TIMEOUT => 3,
+                        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
                     ]);
 
                     // Verify tables exist; if database is newly imported or empty, initialize
@@ -89,7 +90,8 @@ class Database {
                             $pdo = new PDO($dsn, $prof['username'], $prof['password'], [
                                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                                PDO::ATTR_TIMEOUT => 3
+                                PDO::ATTR_TIMEOUT => 3,
+                                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
                             ]);
                             $checkTable = $pdo->query("SHOW TABLES LIKE 'operators'")->fetch();
                             if (!$checkTable) {

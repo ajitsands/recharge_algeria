@@ -14,6 +14,10 @@
 --            username: dealer_constantine password: dealer123
 -- ============================================================================
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+SET collation_connection = 'utf8mb4_unicode_ci';
+
 -- ============================================================================
 -- PART 1: SCHEMA CREATION
 -- ============================================================================
@@ -24,7 +28,7 @@ CREATE TABLE IF NOT EXISTS `settings` (
     `key_name` VARCHAR(100) UNIQUE NOT NULL,
     `value` TEXT NOT NULL,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. Users (Admin, Agents/Dealers, Finance/Support)
 CREATE TABLE IF NOT EXISTS `users` (
@@ -51,7 +55,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     `last_login` TIMESTAMP NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. Telecom Operators & Services
 CREATE TABLE IF NOT EXISTS `operators` (
@@ -68,7 +72,7 @@ CREATE TABLE IF NOT EXISTS `operators` (
     `color_hex` VARCHAR(20) DEFAULT '#006633',
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. Custom Commission Rates per Dealer
 CREATE TABLE IF NOT EXISTS `dealer_commissions` (
@@ -81,7 +85,7 @@ CREATE TABLE IF NOT EXISTS `dealer_commissions` (
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`operator_id`) REFERENCES `operators`(`id`) ON DELETE CASCADE,
     UNIQUE KEY `user_operator` (`user_id`, `operator_id`)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. Wallet Transactions & Immutable Sub-ledger
 CREATE TABLE IF NOT EXISTS `wallet_transactions` (
@@ -97,7 +101,7 @@ CREATE TABLE IF NOT EXISTS `wallet_transactions` (
     `created_by` INT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. Wallet Top-Up Requests
 CREATE TABLE IF NOT EXISTS `topup_requests` (
@@ -114,7 +118,7 @@ CREATE TABLE IF NOT EXISTS `topup_requests` (
     `reviewed_at` TIMESTAMP NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 7. Recharge Transactions
 CREATE TABLE IF NOT EXISTS `recharges` (
@@ -138,7 +142,7 @@ CREATE TABLE IF NOT EXISTS `recharges` (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`operator_id`) REFERENCES `operators`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 8. Customer Support & Disputes
 CREATE TABLE IF NOT EXISTS `complaints` (
@@ -156,7 +160,7 @@ CREATE TABLE IF NOT EXISTS `complaints` (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`recharge_id`) REFERENCES `recharges`(`id`) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 9. Audit Log
 CREATE TABLE IF NOT EXISTS `audit_logs` (
@@ -168,7 +172,7 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
     `details` TEXT NULL,
     `ip_address` VARCHAR(45) NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ============================================================================
