@@ -292,6 +292,39 @@ if ($route === '/api/dealers' && $method === 'GET') {
     jsonResponse(['success' => true, 'dealers' => $dealers]);
 }
 
+if ($route === '/api/dealers/ledger' && $method === 'GET') {
+    $userId = intval($_GET['user_id'] ?? 0);
+    if ($userId <= 0) {
+        jsonResponse(['success' => false, 'error' => 'A valid dealer ID is required.'], 400);
+    }
+
+    $dealerStmt = $pdo->prepare("
+        SELECT id, full_name, business_name, phone, wallet_balance, credit_limit
+        FROM users
+        WHERE id = ? AND role = 'dealer'
+    ");
+    $dealerStmt->execute([$userId]);
+    $dealer = $dealerStmt->fetch();
+    if (!$dealer) {
+        jsonResponse(['success' => false, 'error' => 'Dealer or store not found.'], 404);
+    }
+
+    $transactionStmt = $pdo->prepare("
+        SELECT id, transaction_ref, type, amount, balance_before, balance_after, related_id, notes, created_at
+        FROM wallet_transactions
+        WHERE user_id = ?
+        ORDER BY id DESC
+        LIMIT 500
+    ");
+    $transactionStmt->execute([$userId]);
+
+    jsonResponse([
+        'success' => true,
+        'dealer' => $dealer,
+        'transactions' => $transactionStmt->fetchAll()
+    ]);
+}
+
 if ($route === '/api/dealers/approve' && $method === 'POST') {
     $input = getRequestJson();
     $userId = intval($input['user_id'] ?? 0);

@@ -49,6 +49,7 @@ export const api = {
 
   // Dealers
   getDealers: (status) => request(status ? `/dealers?status=${status}` : '/dealers'),
+  getDealerLedger: (userId) => request(`/dealers/ledger?user_id=${encodeURIComponent(userId)}`),
   approveDealer: (payload) => request('/dealers/approve', { method: 'POST', body: JSON.stringify(payload) }),
   adjustBalance: (payload) => request('/dealers/adjust-balance', { method: 'POST', body: JSON.stringify(payload) }),
 
