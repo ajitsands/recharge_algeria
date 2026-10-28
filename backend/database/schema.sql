@@ -4,8 +4,9 @@
 -- Charset: utf8mb4 (supports Arabic and multilingual UTF-8)
 -- ============================================================================
 
-CREATE DATABASE IF NOT EXISTS `algeria_recharge` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `algeria_recharge`;
+-- Note for shared cPanel hosting: Create the database in cPanel first, then select it.
+-- CREATE DATABASE IF NOT EXISTS `algeria_recharge` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- USE `algeria_recharge`;
 
 -- 1. System Settings & Configuration
 CREATE TABLE IF NOT EXISTS `settings` (
@@ -94,7 +95,7 @@ CREATE TABLE IF NOT EXISTS `topup_requests` (
     `request_ref` VARCHAR(50) UNIQUE NOT NULL,
     `user_id` INT NOT NULL,
     `amount` DECIMAL(12, 2) NOT NULL,
-    `payment_method` ENUM('cash_collection', 'baridimob', 'bank_ccp', 'credit_extension') DEFAULT 'cash_collection',
+    `payment_method` ENUM('cash_collection', 'baridimob', 'bank_ccp', 'ccp_rip', 'bank_transfer', 'credit_extension') DEFAULT 'cash_collection',
     `proof_reference` VARCHAR(100) NULL,
     `status` ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
     `notes` TEXT NULL,
