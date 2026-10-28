@@ -8,7 +8,6 @@ pnpm-debug.log*
 
 # Production builds
 dist/
-frontend/dist/
 build/
 
 # Environment and sensitive keys
