@@ -1,0 +1,293 @@
+.company-profile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.66);
+  backdrop-filter: blur(5px);
+}
+
+.company-profile-modal {
+  width: min(100%, 742px);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 17px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  direction: ltr;
+  text-align: left;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.3);
+}
+
+.company-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.company-profile-brand {
+  flex: 0 0 124px;
+  color: #293548;
+  text-align: center;
+}
+
+.company-profile-brand-mark {
+  display: block;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -1px;
+}
+
+.company-profile-brand-mark span {
+  margin-left: 2px;
+  color: #70ae35;
+  font-size: 13px;
+}
+
+.company-profile-brand-caption {
+  display: block;
+  color: #64748b;
+  font-size: 8px;
+}
+
+.company-profile-heading {
+  flex: 1;
+}
+
+.company-profile-heading h2 {
+  margin: 0 0 3px;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.company-profile-heading p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.company-profile-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.company-profile-close:hover {
+  background: var(--bg-surface-hover);
+}
+
+.company-profile-content {
+  padding: 22px 24px;
+}
+
+.company-support-box {
+  padding: 18px 20px;
+  border: 1px solid #34d399;
+  border-radius: 11px;
+  background: #ecfdf5;
+  color: #176b51;
+}
+
+.company-support-box h3,
+.company-products-box h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.company-support-box p,
+.company-products-box p {
+  margin: 0;
+  color: #488675;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.company-support-box a:not(.company-whatsapp-actions a),
+.company-products-box p a {
+  color: inherit;
+}
+
+.company-whatsapp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.company-whatsapp-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #20c968;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 3px 8px rgba(32, 201, 104, 0.2);
+}
+
+.company-whatsapp-actions a:hover {
+  background: #16ad56;
+}
+
+.company-profile-description {
+  margin: 19px 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.company-profile-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 21px;
+}
+
+.company-profile-facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-surface-alt);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.company-products-box {
+  padding: 19px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 11px;
+  background: var(--bg-surface-alt);
+}
+
+.company-products-box h3 {
+  color: var(--text-primary);
+}
+
+.company-products-box p a {
+  color: #087ba0;
+  font-weight: 700;
+}
+
+.company-products-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 10px 17px;
+  border-radius: 9px;
+  background: #08799b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.company-products-button:hover {
+  background: #05637f;
+}
+
+.company-profile-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 15px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface-alt);
+}
+
+.company-profile-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #059669;
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.company-profile-footer a:nth-of-type(3) {
+  color: #087ba0;
+}
+
+.company-profile-footer a:nth-of-type(4) {
+  color: #70ae35;
+}
+
+.company-profile-footer button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .company-profile-overlay {
+    padding: 10px;
+  }
+
+  .company-profile-modal {
+    max-height: calc(100vh - 20px);
+  }
+
+  .company-profile-header {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .company-profile-brand {
+    flex-basis: 84px;
+  }
+
+  .company-profile-brand-mark {
+    font-size: 16px;
+  }
+
+  .company-profile-heading h2 {
+    font-size: 14px;
+  }
+
+  .company-profile-heading p {
+    font-size: 10px;
+  }
+
+  .company-profile-content {
+    padding: 15px;
+  }
+
+  .company-support-box,
+  .company-products-box {
+    padding: 15px;
+  }
+
+  .company-profile-footer {
+    padding: 14px 15px;
+  }
+}

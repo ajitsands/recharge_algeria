@@ -3,6 +3,7 @@ import AlgerianArtHeader from './components/AlgerianArtHeader';
 import AdminPortal from './components/AdminPortal';
 import DealerMobileApp from './components/DealerMobileApp';
 import MobileAccessQRModal from './components/MobileAccessQRModal';
+import PoweredByProfileModal from './components/PoweredByProfileModal';
 import { translations } from './i18n';
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
   });
 
   const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [companyProfileOpen, setCompanyProfileOpen] = useState(false);
 
   const setMode = (newMode) => {
     setModeState(newMode);
@@ -165,9 +167,21 @@ export default function App() {
             {lang === 'ar' ? '📱 فتح تطبيق الهاتف (QR Scan)' : '📱 Open Mobile App (QR Scan)'}
           </button>
           <span>•</span>
-          <span style={{ fontWeight: '700', color: 'var(--text-secondary)', letterSpacing: '0.2px' }}>
+          <button
+            onClick={() => setCompanyProfileOpen(true)}
+            style={{
+              padding: 0,
+              border: 'none',
+              background: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontWeight: '700',
+              fontSize: '12px',
+              letterSpacing: '0.2px'
+            }}
+          >
             Powered By SaNDS Lab Middle East W.L.L
-          </span>
+          </button>
         </div>
       </footer>
 
@@ -176,6 +190,10 @@ export default function App() {
         open={qrModalOpen}
         onClose={() => setQrModalOpen(false)}
         lang={lang}
+      />
+      <PoweredByProfileModal
+        open={companyProfileOpen}
+        onClose={() => setCompanyProfileOpen(false)}
       />
     </div>
   );
