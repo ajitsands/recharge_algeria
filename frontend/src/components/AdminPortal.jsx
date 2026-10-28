@@ -815,6 +815,70 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
     }
   ], [lang, currencyLabel]);
 
+  const dealerLedgerColumns = useMemo(() => [
+    {
+      key: 'created_at',
+      header: lang === 'ar' ? 'التاريخ' : 'Date',
+      sortKey: 'created_at',
+      render: (transaction) => <span style={{ whiteSpace: 'nowrap' }}>{transaction.created_at}</span>
+    },
+    {
+      key: 'type',
+      header: lang === 'ar' ? 'النوع' : 'Type',
+      sortKey: 'type',
+      render: (transaction) => {
+        const isCredit = ['credit_topup', 'commission_credit', 'refund', 'refund_credit'].includes(transaction.type);
+        const typeLabel = {
+          credit_topup: lang === 'ar' ? 'إضافة رصيد' : 'Wallet credit',
+          recharge_debit: lang === 'ar' ? 'خصم شحن' : 'Recharge debit',
+          commission_credit: lang === 'ar' ? 'عمولة' : 'Commission',
+          refund: lang === 'ar' ? 'استرجاع' : 'Refund',
+          refund_credit: lang === 'ar' ? 'استرجاع' : 'Refund',
+          adjustment: lang === 'ar' ? 'تعديل' : 'Adjustment'
+        }[transaction.type] || transaction.type;
+        return (
+          <span style={{ color: isCredit ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: '800', whiteSpace: 'nowrap' }}>
+            {typeLabel}
+          </span>
+        );
+      }
+    },
+    {
+      key: 'amount',
+      header: lang === 'ar' ? 'المبلغ' : 'Amount',
+      sortKey: 'amount',
+      render: (transaction) => (
+        <span style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontWeight: '800' }}>
+          {parseFloat(transaction.amount).toLocaleString()} {currencyLabel}
+        </span>
+      )
+    },
+    {
+      key: 'balance_before',
+      header: lang === 'ar' ? 'الرصيد قبل' : 'Before',
+      sortKey: 'balance_before',
+      render: (transaction) => <span style={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_before).toLocaleString()}</span>
+    },
+    {
+      key: 'balance_after',
+      header: lang === 'ar' ? 'الرصيد بعد' : 'After',
+      sortKey: 'balance_after',
+      render: (transaction) => <span style={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_after).toLocaleString()}</span>
+    },
+    {
+      key: 'notes',
+      header: lang === 'ar' ? 'الوصف' : 'Description',
+      sortKey: 'notes',
+      cellStyle: { minWidth: '200px' },
+      render: (transaction) => (
+        <div>
+          <div>{transaction.notes || '—'}</div>
+          <small style={{ color: 'var(--text-muted)' }}>{transaction.transaction_ref}</small>
+        </div>
+      )
+    }
+  ], [lang, currencyLabel]);
+
   return (
     <div className="erp-container">
       {/* Toast Notification */}
@@ -2238,46 +2302,23 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
               </button>
             </div>
 
-            <div style={{ overflow: 'auto', border: '1px solid var(--border-subtle)', borderRadius: '10px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '720px', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-                    {[lang === 'ar' ? 'التاريخ' : 'Date', lang === 'ar' ? 'النوع' : 'Type', lang === 'ar' ? 'المبلغ' : 'Amount', lang === 'ar' ? 'الرصيد قبل' : 'Before', lang === 'ar' ? 'الرصيد بعد' : 'After', lang === 'ar' ? 'الوصف' : 'Description'].map((heading) => (
-                      <th key={heading} style={{ padding: '10px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)', whiteSpace: 'nowrap' }}>{heading}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {dealerLedgerModal.loading ? (
-                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'جارٍ تحميل السجل...' : 'Loading ledger...'}</td></tr>
-                  ) : dealerLedgerModal.transactions.length === 0 ? (
-                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'لا توجد حركات مسجلة لهذا المحل.' : 'No wallet transactions recorded for this store.'}</td></tr>
-                  ) : dealerLedgerModal.transactions.map((transaction) => {
-                    const isCredit = ['credit_topup', 'commission_credit', 'refund', 'refund_credit'].includes(transaction.type);
-                    const typeLabel = {
-                      credit_topup: lang === 'ar' ? 'إضافة رصيد' : 'Wallet credit',
-                      recharge_debit: lang === 'ar' ? 'خصم شحن' : 'Recharge debit',
-                      commission_credit: lang === 'ar' ? 'عمولة' : 'Commission',
-                      refund: lang === 'ar' ? 'استرجاع' : 'Refund',
-                      refund_credit: lang === 'ar' ? 'استرجاع' : 'Refund',
-                      adjustment: lang === 'ar' ? 'تعديل' : 'Adjustment'
-                    }[transaction.type] || transaction.type;
-                    return (
-                      <tr key={transaction.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>{transaction.created_at}</td>
-                        <td style={{ padding: '10px', color: isCredit ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: '800', whiteSpace: 'nowrap' }}>{typeLabel}</td>
-                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.amount).toLocaleString()} {currencyLabel}</td>
-                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_before).toLocaleString()}</td>
-                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_after).toLocaleString()}</td>
-                        <td style={{ padding: '10px', minWidth: '200px' }}>
-                          <div>{transaction.notes || '—'}</div>
-                          <small style={{ color: 'var(--text-muted)' }}>{transaction.transaction_ref}</small>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div style={{ minHeight: 0, overflowY: 'auto' }}>
+              <DataTable
+                columns={dealerLedgerColumns}
+                data={dealerLedgerModal.transactions}
+                keyField="id"
+                defaultPageSize={10}
+                pageSizeOptions={[5, 10, 25, 50]}
+                defaultSortField="id"
+                defaultSortDir="desc"
+                lang={lang}
+                searchPlaceholder={lang === 'ar' ? 'بحث في سجل المحفظة...' : 'Search wallet ledger...'}
+                emptyMessage={
+                  dealerLedgerModal.loading
+                    ? (lang === 'ar' ? 'جارٍ تحميل السجل...' : 'Loading ledger...')
+                    : (lang === 'ar' ? 'لا توجد حركات مسجلة لهذا المحل.' : 'No wallet transactions recorded for this store.')
+                }
+              />
             </div>
           </div>
         </div>
