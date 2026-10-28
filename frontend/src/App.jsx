@@ -71,57 +71,22 @@ export default function App() {
       <div style={{ 
         minHeight: '100vh', 
         width: '100%', 
-        backgroundColor: theme === 'dark' ? '#0f172a' : '#e2e8f0', 
+        backgroundColor: theme === 'dark' ? '#0f172a' : '#f1f5f9', 
         display: 'flex', 
-        flexDirection: 'column' 
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        padding: 0,
+        margin: 0
       }}>
-        {/* Helper bar to easily jump back to desktop Admin ERP */}
-        <div style={{
-          backgroundColor: '#005a2b',
-          color: '#ffffff',
-          padding: '8px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontSize: '12.5px',
-          fontWeight: '700',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          zIndex: 99
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>📱 {lang === 'ar' ? 'وضع الهاتف الذكي للموزع (Dealer Mobile View)' : 'Dealer Mobile POS View'}</span>
-          </div>
-          <button
-            onClick={() => {
-              window.location.href = window.location.origin + window.location.pathname;
-            }}
-            style={{
-              padding: '5px 14px',
-              borderRadius: '8px',
-              backgroundColor: '#ffffff',
-              color: '#005a2b',
-              border: 'none',
-              fontWeight: '800',
-              fontSize: '11.5px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
-            }}
-          >
-            {lang === 'ar' ? '🖥️ فتح لوحة تحكم الإدارة الكاملة (Desktop Admin ERP)' : '🖥️ Open Desktop Admin ERP'}
-          </button>
-        </div>
-
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '12px 8px' }}>
-          <DealerMobileApp
-            t={t}
-            lang={lang}
-            theme={theme}
-            setLang={setLang}
-            setTheme={setTheme}
-            onOpenQrModal={() => setQrModalOpen(true)}
-            isDirectMobile={true}
-          />
-        </div>
+        <DealerMobileApp
+          t={t}
+          lang={lang}
+          theme={theme}
+          setLang={setLang}
+          setTheme={setTheme}
+          onOpenQrModal={() => setQrModalOpen(true)}
+          isDirectMobile={true}
+        />
 
         <MobileAccessQRModal
           open={qrModalOpen}
