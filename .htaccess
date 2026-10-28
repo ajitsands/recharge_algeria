@@ -1,29 +1,31 @@
+# Razik Telecom - Production Apache Server Configuration
+DirectoryIndex index.html index.php
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
 
-    # Handle CORS Preflight Options
+    # Handle CORS Preflight OPTIONS
     RewriteCond %{REQUEST_METHOD} OPTIONS
     RewriteRule ^(.*)$ $1 [R=200,L]
 
     # Route /api and /api/* to backend PHP handler
     RewriteRule ^api(/.*)?$ backend/index.php [QSA,L]
 
-    # Serve existing files/directories directly from frontend/dist if built there
+    # Serve existing files/directories directly
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # SPA Fallback: If dist/index.html exists, route to it
-    RewriteCond %{DOCUMENT_ROOT}/frontend/dist/index.html -f
-    RewriteRule ^(.*)$ frontend/dist/index.html [L]
-
-    # Alternative: Route to root index.html
+    # SPA Fallback for client-side routing
     RewriteCond %{DOCUMENT_ROOT}/index.html -f
     RewriteRule ^(.*)$ index.html [L]
+
+    RewriteCond %{DOCUMENT_ROOT}/frontend/dist/index.html -f
+    RewriteRule ^(.*)$ frontend/dist/index.html [L]
 </IfModule>
 
-# Security Headers
+# Security & CORS Headers
 <IfModule mod_headers.c>
     Header set Access-Control-Allow-Origin "*"
     Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
