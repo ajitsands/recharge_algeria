@@ -44,6 +44,8 @@ export const api = {
   // Operators
   getOperators: () => request('/operators'),
   updateOperator: (payload) => request('/operators', { method: 'POST', body: JSON.stringify(payload) }),
+  adjustOperatorBalance: (payload) => request('/operators/adjust-balance', { method: 'POST', body: JSON.stringify(payload) }),
+  getOperatorLedger: (operatorId) => request(`/operators/ledger?operator_id=${encodeURIComponent(operatorId)}`),
 
   // Dealers
   getDealers: (status) => request(status ? `/dealers?status=${status}` : '/dealers'),

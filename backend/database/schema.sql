@@ -64,6 +64,22 @@ CREATE TABLE IF NOT EXISTS `operators` (
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Operator Balance Ledger (manual adjustments and recharge deductions)
+CREATE TABLE IF NOT EXISTS `operator_transactions` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `transaction_ref` VARCHAR(50) UNIQUE NOT NULL,
+    `operator_id` INT NOT NULL,
+    `type` ENUM('credit', 'debit', 'recharge_debit') NOT NULL,
+    `amount` DECIMAL(12, 2) NOT NULL,
+    `balance_before` DECIMAL(12, 2) NOT NULL,
+    `balance_after` DECIMAL(12, 2) NOT NULL,
+    `description` TEXT NOT NULL,
+    `related_recharge_id` INT NULL,
+    `created_by` INT NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX `operator_transactions_operator_created` (`operator_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 4. Custom Commission Rates per Dealer / Tier (Optional Override)
 CREATE TABLE IF NOT EXISTS `dealer_commissions` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,

@@ -52,6 +52,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
 
   // Modals
   const [balanceModal, setBalanceModal] = useState({ open: false, dealer: null, amount: '', type: 'credit', notes: '' });
+  const [providerAdjustmentModal, setProviderAdjustmentModal] = useState({ open: false, operator: null, amount: '', type: 'credit', description: '' });
+  const [providerLedgerModal, setProviderLedgerModal] = useState({ open: false, operator: null, transactions: [], loading: false });
+  const [providerAdjustmentSubmitting, setProviderAdjustmentSubmitting] = useState(false);
   const [complaintModal, setComplaintModal] = useState({ open: false, ticket: null, status: 'resolved_confirmed', response: '', refund: false });
   const [disputeModal, setDisputeModal] = useState({ open: false, recharge: null, subject: '', description: '', status: 'investigating' });
   const [opDropdownOpen, setOpDropdownOpen] = useState(false);
@@ -157,6 +160,47 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
     } else {
       notify(res.error || "Update failed", true);
     }
+  };
+
+  const handleAdjustOperatorBalance = async (e) => {
+    e.preventDefault();
+    const description = providerAdjustmentModal.description.trim();
+    const amount = Number(providerAdjustmentModal.amount);
+    if (!providerAdjustmentModal.operator || !Number.isFinite(amount) || amount <= 0 || !description) {
+      notify(lang === 'ar' ? 'يرجى إدخال مبلغ صحيح ووصف للعملية.' : 'Enter a valid amount and transaction description.', true);
+      return;
+    }
+
+    setProviderAdjustmentSubmitting(true);
+    try {
+      const res = await api.adjustOperatorBalance({
+        operator_id: providerAdjustmentModal.operator.id,
+        type: providerAdjustmentModal.type,
+        amount,
+        description
+      });
+      if (!res.success) {
+        notify(res.error || (lang === 'ar' ? 'تعذر تعديل رصيد المتعامل.' : 'Provider balance adjustment failed.'), true);
+        return;
+      }
+
+      notify(res.message);
+      setProviderAdjustmentModal({ open: false, operator: null, amount: '', type: 'credit', description: '' });
+      await loadAllData();
+    } finally {
+      setProviderAdjustmentSubmitting(false);
+    }
+  };
+
+  const openProviderLedger = async (operator) => {
+    setProviderLedgerModal({ open: true, operator, transactions: [], loading: true });
+    const res = await api.getOperatorLedger(operator.id);
+    if (res.success) {
+      setProviderLedgerModal({ open: true, operator, transactions: res.transactions || [], loading: false });
+      return;
+    }
+    setProviderLedgerModal({ open: true, operator, transactions: [], loading: false });
+    notify(res.error || (lang === 'ar' ? 'تعذر تحميل سجل المتعامل.' : 'Could not load provider ledger.'), true);
   };
 
   const handleResolveTicket = async (e) => {
@@ -1226,6 +1270,75 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                           </span>
                         )}
                       </div>
+
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setProviderAdjustmentModal({ open: true, operator: op, amount: '', type: 'credit', description: '' })}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            flex: 1,
+                            padding: '9px 10px',
+                            border: '1px solid var(--algeria-green)',
+                            borderRadius: '8px',
+                            background: 'var(--algeria-green)',
+                            color: '#fff',
+                            fontSize: '12px',
+                            fontWeight: '800',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <PlusCircle style={{ width: '15px', height: '15px' }} />
+                          {lang === 'ar' ? 'إضافة رصيد' : 'Add Amount'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProviderAdjustmentModal({ open: true, operator: op, amount: '', type: 'debit', description: '' })}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            flex: 1,
+                            padding: '9px 10px',
+                            border: '1px solid var(--algeria-red)',
+                            borderRadius: '8px',
+                            background: 'transparent',
+                            color: 'var(--algeria-red)',
+                            fontSize: '12px',
+                            fontWeight: '800',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <ArrowDownLeft style={{ width: '15px', height: '15px' }} />
+                          {lang === 'ar' ? 'خصم رصيد' : 'Remove Amount'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openProviderLedger(op)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            flex: 1,
+                            padding: '9px 10px',
+                            border: '1px solid var(--border-strong)',
+                            borderRadius: '8px',
+                            background: 'var(--bg-surface-alt)',
+                            color: 'var(--text-primary)',
+                            fontSize: '12px',
+                            fontWeight: '800',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <History style={{ width: '15px', height: '15px' }} />
+                          {lang === 'ar' ? 'السجل' : 'Ledger'}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1904,6 +2017,156 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {providerAdjustmentModal.open && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', color: 'var(--text-primary)' }}>
+              {providerAdjustmentModal.type === 'credit'
+                ? (lang === 'ar' ? 'إضافة رصيد للمتعامل' : `Add Balance to ${providerAdjustmentModal.operator?.name}`)
+                : (lang === 'ar' ? 'خصم رصيد من المتعامل' : `Debit Balance from ${providerAdjustmentModal.operator?.name}`)}
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              {lang === 'ar' ? 'الرصيد الحالي:' : 'Current balance:'}{' '}
+              <strong>{parseFloat(providerAdjustmentModal.operator?.balance || 0).toLocaleString()} {currencyLabel}</strong>
+            </p>
+
+            <form onSubmit={handleAdjustOperatorBalance} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  {lang === 'ar' ? 'المبلغ (د.ج)' : 'Amount (DZD)'}
+                </label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  required
+                  autoFocus
+                  value={providerAdjustmentModal.amount}
+                  onChange={(e) => setProviderAdjustmentModal(prev => ({ ...prev, amount: e.target.value }))}
+                  className="filter-input"
+                  style={{ width: '100%', fontSize: '16px', fontWeight: '800', fontFamily: 'monospace' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  {lang === 'ar' ? 'وصف العملية (إلزامي)' : 'Transaction description (required)'}
+                </label>
+                <textarea
+                  rows="3"
+                  required
+                  maxLength="2000"
+                  value={providerAdjustmentModal.description}
+                  onChange={(e) => setProviderAdjustmentModal(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder={lang === 'ar' ? 'مثال: شحن رصيد من المورد، تسوية...' : 'e.g. Provider payment, balance correction...'}
+                  className="filter-input"
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  disabled={providerAdjustmentSubmitting}
+                  onClick={() => setProviderAdjustmentModal({ open: false, operator: null, amount: '', type: 'credit', description: '' })}
+                  style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-primary)', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={providerAdjustmentSubmitting || !providerAdjustmentModal.amount || !providerAdjustmentModal.description.trim()}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    backgroundColor: providerAdjustmentModal.type === 'credit' ? 'var(--algeria-green)' : 'var(--algeria-red)',
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    cursor: providerAdjustmentSubmitting ? 'wait' : 'pointer',
+                    opacity: providerAdjustmentSubmitting || !providerAdjustmentModal.amount || !providerAdjustmentModal.description.trim() ? 0.6 : 1
+                  }}
+                >
+                  {providerAdjustmentSubmitting
+                    ? (lang === 'ar' ? 'جارٍ الحفظ...' : 'Saving...')
+                    : (lang === 'ar' ? 'تأكيد وحفظ في السجل' : 'Submit & Record in Ledger')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {providerLedgerModal.open && (
+        <div className="modal-overlay" onClick={() => setProviderLedgerModal({ open: false, operator: null, transactions: [], loading: false })}>
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(900px, 96vw)', maxWidth: '900px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)' }}>
+                  {lang === 'ar' ? 'سجل حركات رصيد' : 'Provider Balance Ledger'}{' '}
+                  {lang === 'ar' ? providerLedgerModal.operator?.name_ar : providerLedgerModal.operator?.name}
+                </h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  {lang === 'ar' ? 'يشمل الإضافات والخصومات وحركات الشحن.' : 'Credits, debits, and recharge balance movements.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label={lang === 'ar' ? 'إغلاق' : 'Close'}
+                onClick={() => setProviderLedgerModal({ open: false, operator: null, transactions: [], loading: false })}
+                style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                <X style={{ width: '20px', height: '20px' }} />
+              </button>
+            </div>
+
+            <div style={{ overflow: 'auto', border: '1px solid var(--border-subtle)', borderRadius: '10px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '680px', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-surface-alt)', textAlign: 'left' }}>
+                    {[lang === 'ar' ? 'التاريخ' : 'Date', lang === 'ar' ? 'النوع' : 'Type', lang === 'ar' ? 'المبلغ' : 'Amount', lang === 'ar' ? 'الرصيد قبل' : 'Before', lang === 'ar' ? 'الرصيد بعد' : 'After', lang === 'ar' ? 'الوصف' : 'Description'].map((heading) => (
+                      <th key={heading} style={{ padding: '10px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)', whiteSpace: 'nowrap' }}>{heading}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {providerLedgerModal.loading ? (
+                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'جارٍ تحميل السجل...' : 'Loading ledger...'}</td></tr>
+                  ) : providerLedgerModal.transactions.length === 0 ? (
+                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'لا توجد حركات مسجلة بعد.' : 'No provider transactions recorded yet.'}</td></tr>
+                  ) : providerLedgerModal.transactions.map((transaction) => {
+                    const isCredit = transaction.type === 'credit';
+                    const typeLabel = isCredit
+                      ? (lang === 'ar' ? 'إضافة' : 'Credit')
+                      : transaction.type === 'debit'
+                        ? (lang === 'ar' ? 'خصم' : 'Debit')
+                        : (lang === 'ar' ? 'خصم شحن' : 'Recharge');
+                    return (
+                      <tr key={transaction.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>{transaction.created_at}</td>
+                        <td style={{ padding: '10px', color: isCredit ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: '800', whiteSpace: 'nowrap' }}>{typeLabel}</td>
+                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.amount).toLocaleString()} {currencyLabel}</td>
+                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_before).toLocaleString()}</td>
+                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_after).toLocaleString()}</td>
+                        <td style={{ padding: '10px', minWidth: '200px' }}>
+                          <div>{transaction.description}</div>
+                          <small style={{ color: 'var(--text-muted)' }}>{transaction.transaction_ref}</small>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

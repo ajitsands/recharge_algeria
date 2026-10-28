@@ -70,6 +70,7 @@ class Database {
                         self::initializeMySqlDatabase($pdo);
                     }
 
+                    self::ensureOperatorTransactionsTable($pdo, 'mysql');
                     self::$instance = $pdo;
                     self::$driver = 'mysql';
                     return self::$instance;
@@ -97,6 +98,7 @@ class Database {
                             if (!$checkTable) {
                                 self::initializeMySqlDatabase($pdo);
                             }
+                            self::ensureOperatorTransactionsTable($pdo, 'mysql');
                             self::$instance = $pdo;
                             self::$driver = 'mysql';
                             return self::$instance;
@@ -132,11 +134,52 @@ class Database {
             self::initializeSqliteDatabase($pdo);
         }
 
+        self::ensureOperatorTransactionsTable($pdo, 'sqlite');
         return self::$instance;
     }
 
     public static function getDriver(): string {
         return self::$driver;
+    }
+
+    private static function ensureOperatorTransactionsTable(PDO $pdo, string $driver): void {
+        if ($driver === 'mysql') {
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS operator_transactions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    transaction_ref VARCHAR(50) UNIQUE NOT NULL,
+                    operator_id INT NOT NULL,
+                    type ENUM('credit', 'debit', 'recharge_debit') NOT NULL,
+                    amount DECIMAL(12, 2) NOT NULL,
+                    balance_before DECIMAL(12, 2) NOT NULL,
+                    balance_after DECIMAL(12, 2) NOT NULL,
+                    description TEXT NOT NULL,
+                    related_recharge_id INT NULL,
+                    created_by INT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX operator_transactions_operator_created (operator_id, created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            return;
+        }
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS operator_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_ref TEXT UNIQUE NOT NULL,
+                operator_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                balance_before REAL NOT NULL,
+                balance_after REAL NOT NULL,
+                description TEXT NOT NULL,
+                related_recharge_id INTEGER,
+                created_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS operator_transactions_operator_created
+                ON operator_transactions (operator_id, created_at)
+        ");
     }
 
     private static function initializeMySqlDatabase(PDO $pdo): void {
@@ -203,6 +246,20 @@ class Database {
                 color_hex TEXT DEFAULT '#006633',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS operator_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_ref TEXT UNIQUE NOT NULL,
+                operator_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                balance_before REAL NOT NULL,
+                balance_after REAL NOT NULL,
+                description TEXT NOT NULL,
+                related_recharge_id INTEGER,
+                created_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS dealer_commissions (

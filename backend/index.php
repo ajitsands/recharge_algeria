@@ -180,6 +180,87 @@ if ($route === '/api/operators' && $method === 'GET') {
     jsonResponse(['success' => true, 'operators' => $operators]);
 }
 
+if ($route === '/api/operators/adjust-balance' && $method === 'POST') {
+    $input = getRequestJson();
+    $operatorId = intval($input['operator_id'] ?? 0);
+    $type = $input['type'] ?? '';
+    $amount = is_numeric($input['amount'] ?? null) ? round(floatval($input['amount']), 2) : 0;
+    $description = is_string($input['description'] ?? null) ? trim($input['description']) : '';
+
+    if ($operatorId <= 0 || !in_array($type, ['credit', 'debit'], true) || !is_finite($amount) || $amount <= 0 || $description === '') {
+        jsonResponse(['success' => false, 'error' => 'A valid provider, credit/debit type, positive amount, and description are required.'], 400);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $lockClause = Database::getDriver() === 'mysql' ? ' FOR UPDATE' : '';
+        $stmt = $pdo->prepare("SELECT balance FROM operators WHERE id = ?{$lockClause}");
+        $stmt->execute([$operatorId]);
+        $balanceBefore = $stmt->fetchColumn();
+
+        if ($balanceBefore === false) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Provider not found.'], 404);
+        }
+
+        $balanceBefore = floatval($balanceBefore);
+        $balanceAfter = $type === 'credit' ? $balanceBefore + $amount : $balanceBefore - $amount;
+        if ($balanceAfter < 0) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Insufficient provider balance for this debit.'], 400);
+        }
+
+        $nowStr = date('Y-m-d H:i:s');
+        $pdo->prepare("UPDATE operators SET balance = ?, updated_at = ? WHERE id = ?")
+            ->execute([$balanceAfter, $nowStr, $operatorId]);
+
+        $transactionRef = 'OPTX-ADJ-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(4)));
+        $pdo->prepare("
+            INSERT INTO operator_transactions
+                (transaction_ref, operator_id, type, amount, balance_before, balance_after, description, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        ")->execute([$transactionRef, $operatorId, $type, $amount, $balanceBefore, $balanceAfter, $description]);
+
+        $pdo->commit();
+        jsonResponse([
+            'success' => true,
+            'message' => 'Provider balance updated and recorded in the ledger.',
+            'transaction_ref' => $transactionRef,
+            'balance_before' => $balanceBefore,
+            'balance_after' => $balanceAfter
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        jsonResponse(['success' => false, 'error' => 'Provider balance adjustment failed: ' . $e->getMessage()], 500);
+    }
+}
+
+if ($route === '/api/operators/ledger' && $method === 'GET') {
+    $operatorId = isset($_GET['operator_id']) ? intval($_GET['operator_id']) : 0;
+    if ($operatorId > 0) {
+        $stmt = $pdo->prepare("
+            SELECT ot.*, o.name AS operator_name, o.name_ar AS operator_name_ar
+            FROM operator_transactions ot
+            JOIN operators o ON o.id = ot.operator_id
+            WHERE ot.operator_id = ?
+            ORDER BY ot.id DESC
+            LIMIT 500
+        ");
+        $stmt->execute([$operatorId]);
+    } else {
+        $stmt = $pdo->query("
+            SELECT ot.*, o.name AS operator_name, o.name_ar AS operator_name_ar
+            FROM operator_transactions ot
+            JOIN operators o ON o.id = ot.operator_id
+            ORDER BY ot.id DESC
+            LIMIT 500
+        ");
+    }
+    jsonResponse(['success' => true, 'transactions' => $stmt->fetchAll()]);
+}
+
 if ($route === '/api/operators' && ($method === 'POST' || $method === 'PUT')) {
     $input = getRequestJson();
     $id = intval($input['id'] ?? 0);
@@ -363,6 +444,9 @@ if ($route === '/api/recharge' && $method === 'POST') {
 
         // Deduct wholesale from operator balance
         $pdo->prepare("UPDATE operators SET balance = balance - ? WHERE id = ?")->execute([$faceValue, $detected['id']]);
+        $operatorBalanceAfter = $pdo->prepare("SELECT balance FROM operators WHERE id = ?");
+        $operatorBalanceAfter->execute([$detected['id']]);
+        $operatorBalanceAfter = floatval($operatorBalanceAfter->fetchColumn());
 
         // Insert recharge record
         $nowStr = date('Y-m-d H:i:s');
@@ -388,6 +472,22 @@ if ($route === '/api/recharge' && $method === 'POST') {
             $nowStr
         ]);
         $rechargeId = $pdo->lastInsertId();
+
+        $operatorTransactionRef = 'OPTX-RCH-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(4)));
+        $pdo->prepare("
+            INSERT INTO operator_transactions
+                (transaction_ref, operator_id, type, amount, balance_before, balance_after, description, related_recharge_id, created_by)
+            VALUES (?, ?, 'recharge_debit', ?, ?, ?, ?, ?, ?)
+        ")->execute([
+            $operatorTransactionRef,
+            $detected['id'],
+            $faceValue,
+            $operatorBalanceAfter + $faceValue,
+            $operatorBalanceAfter,
+            "Recharge {$rechargeRef} for {$phone}",
+            $rechargeId,
+            $userId
+        ]);
 
         $pdo->commit();
 
