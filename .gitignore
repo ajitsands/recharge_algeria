@@ -7,8 +7,9 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Production builds
-dist/
+/dist/
 build/
+!frontend/dist/
 
 # Environment and sensitive keys
 .env
