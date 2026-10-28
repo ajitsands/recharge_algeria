@@ -216,6 +216,45 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
     }
   };
 
+  const handleSaveSettings = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api.updateSettings(systemSettings);
+      if (res.success) {
+        notify(lang === 'ar' ? 'تم حفظ إعدادات النظام بنجاح' : 'System settings saved successfully');
+        loadAllData();
+      } else {
+        notify(res.error || (lang === 'ar' ? 'تعذر حفظ الإعدادات' : 'Failed to save settings'), true);
+      }
+    } catch (err) {
+      console.error(err);
+      notify(lang === 'ar' ? 'خطأ في الاتصال بالسيرفر' : 'Network error saving settings', true);
+    }
+  };
+
+  // Filtered Recharges for Audit Ledger Tab
+  const filteredRecharges = useMemo(() => {
+    return (recharges || []).filter(r => {
+      if (rechargeFilter.operator && String(r.operator_id) !== String(rechargeFilter.operator)) {
+        return false;
+      }
+      if (rechargeFilter.status && r.status !== rechargeFilter.status) {
+        return false;
+      }
+      if (rechargeFilter.search) {
+        const q = rechargeFilter.search.toLowerCase().trim();
+        const phone = (r.phone_number || '').toLowerCase();
+        const ref = (r.recharge_ref || '').toLowerCase();
+        const dealer = (r.dealer_name || '').toLowerCase();
+        const biz = (r.business_name || '').toLowerCase();
+        if (!phone.includes(q) && !ref.includes(q) && !dealer.includes(q) && !biz.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [recharges, rechargeFilter]);
+
   // Recharges Table Columns (Shared for Dashboard & Full Ledger)
   const rechargeColumns = useMemo(() => [
     {
