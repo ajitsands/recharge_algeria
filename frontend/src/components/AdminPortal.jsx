@@ -2,20 +2,23 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, Users, History, CreditCard, Percent, LifeBuoy, Settings,
   TrendingUp, AlertTriangle, CheckCircle, Clock, XCircle, Search, RefreshCw,
-  PlusCircle, ArrowUpRight, ArrowDownLeft, ShieldCheck, DollarSign, PhoneCall,
+  PlusCircle, ArrowUpRight, ArrowDownLeft, ShieldCheck, DollarSign, PhoneCall, Menu, KeyRound,
   Check, X, FileText, Download, Building, MapPin, ChevronDown, Smartphone, QrCode
 } from 'lucide-react';
 import { api } from '../api';
 import DataTable from './DataTable';
+import { formatDateTime } from '../formatDateTime';
 
-export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
-  const validTabs = ['dashboard', 'dealers', 'recharges', 'topups', 'commissions', 'complaints', 'settings'];
+export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser, authToken }) {
+  const validTabs = ['dashboard', 'dealers', 'collection_agents', 'recharges', 'topups', 'complaints', 'settings'];
   
   const [activeTab, setActiveTabState] = useState(() => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace('#', '');
+      if (hash === 'commissions') return 'settings';
       if (validTabs.includes(hash)) return hash;
       const saved = localStorage.getItem('razik_admin_active_tab');
+      if (saved === 'commissions') return 'settings';
       if (validTabs.includes(saved)) return saved;
     }
     return 'dashboard';
@@ -33,6 +36,11 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
   const [stats, setStats] = useState(null);
   const [operators, setOperators] = useState([]);
   const [dealers, setDealers] = useState([]);
+  const [collectionAgents, setCollectionAgents] = useState([]);
+  const [agentAdminToken, setAgentAdminToken] = useState(null);
+  const [agentAdminCredentials, setAgentAdminCredentials] = useState({ username: '', password: '' });
+  const [agentAdminError, setAgentAdminError] = useState('');
+  const [agentAdminSubmitting, setAgentAdminSubmitting] = useState(false);
   const [recharges, setRecharges] = useState([]);
   const [topupRequests, setTopupRequests] = useState([]);
   const [complaints, setComplaints] = useState([]);
@@ -46,6 +54,8 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
   });
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [navMenuOpen, setNavMenuOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState('general');
 
   // Filter states
   const [rechargeFilter, setRechargeFilter] = useState({ operator: '', status: '', search: '' });
@@ -56,13 +66,119 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
   const [providerLedgerModal, setProviderLedgerModal] = useState({ open: false, operator: null, transactions: [], loading: false });
   const [providerAdjustmentSubmitting, setProviderAdjustmentSubmitting] = useState(false);
   const [dealerLedgerModal, setDealerLedgerModal] = useState({ open: false, dealer: null, transactions: [], loading: false });
+  const [dealerCreateModal, setDealerCreateModal] = useState({
+    open: false,
+    username: '',
+    full_name: '',
+    business_name: '',
+    phone: '',
+    password: '',
+    wilaya: '',
+    commune: '',
+    error: '',
+    submitting: false
+  });
+  const [dealerPasswordModal, setDealerPasswordModal] = useState({
+    open: false,
+    dealer: null,
+    admin_username: '',
+    admin_password: '',
+    new_password: '',
+    confirm_password: '',
+    error: '',
+    submitting: false
+  });
+  const [agentModal, setAgentModal] = useState({ open: false, username: '', full_name: '', phone: '', password: '' });
+  const [agentSubmitting, setAgentSubmitting] = useState(false);
   const [complaintModal, setComplaintModal] = useState({ open: false, ticket: null, status: 'resolved_confirmed', response: '', refund: false });
+  const [complaintSubmitting, setComplaintSubmitting] = useState(false);
+  const [undoRefundModal, setUndoRefundModal] = useState({ open: false, ticket: null, confirmed: false });
+  const [undoRefundSubmitting, setUndoRefundSubmitting] = useState(false);
   const [disputeModal, setDisputeModal] = useState({ open: false, recharge: null, subject: '', description: '', status: 'investigating' });
-  const [opDropdownOpen, setOpDropdownOpen] = useState(false);
 
   const notify = (msg, isError = false) => {
     setNotification({ msg, isError });
     setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleCreateAgent = async (event) => {
+    event.preventDefault();
+    setAgentSubmitting(true);
+    try {
+      const res = await api.createCollectionAgent(agentModal, agentAdminToken);
+      if (!res.success) {
+        notify(res.error || (lang === 'ar' ? 'تعذر إنشاء حساب المحصل.' : 'Could not create collection agent.'), true);
+        return;
+      }
+      notify(res.message);
+      setAgentModal({ open: false, username: '', full_name: '', phone: '', password: '' });
+      const agentsRes = await api.getCollectionAgents(agentAdminToken);
+      if (agentsRes.success) setCollectionAgents(agentsRes.agents || []);
+      else setAgentAdminError(agentsRes.error || (lang === 'ar' ? 'تعذر تحديث قائمة المحصلين.' : 'Could not refresh collection agents.'));
+    } finally {
+      setAgentSubmitting(false);
+    }
+  };
+
+  const handleResetDealerPassword = async (event) => {
+    event.preventDefault();
+    const { dealer, admin_username, admin_password, new_password, confirm_password } = dealerPasswordModal;
+    if (new_password.length < 8) {
+      setDealerPasswordModal((current) => ({ ...current, error: lang === 'ar' ? 'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.' : 'Password must be at least 8 characters.' }));
+      return;
+    }
+    if (new_password !== confirm_password) {
+      setDealerPasswordModal((current) => ({ ...current, error: lang === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.' }));
+      return;
+    }
+
+    setDealerPasswordModal((current) => ({ ...current, submitting: true, error: '' }));
+    try {
+      const login = await api.login({ username: admin_username, password: admin_password });
+      if (!login.success) throw new Error(login.error || 'Admin sign in failed.');
+      if (login.user?.role !== 'admin') {
+        throw new Error(lang === 'ar' ? 'يجب استخدام حساب مسؤول المورّد.' : 'Sign in with a vendor administrator account.');
+      }
+
+      const result = await api.resetDealerPassword({
+        dealer_id: dealer.id,
+        new_password
+      }, login.token);
+      if (!result.success) throw new Error(result.error || 'Could not reset dealer password.');
+
+      setDealerPasswordModal({
+        open: false,
+        dealer: null,
+        admin_username: '',
+        admin_password: '',
+        new_password: '',
+        confirm_password: '',
+        error: '',
+        submitting: false
+      });
+      notify(lang === 'ar' ? `تمت إعادة تعيين كلمة مرور ${dealer.full_name}.` : `Password reset for ${dealer.full_name}.`);
+    } catch (error) {
+      setDealerPasswordModal((current) => ({ ...current, submitting: false, error: error.message }));
+    }
+  };
+
+  const handleAgentAdminLogin = async (event) => {
+    event.preventDefault();
+    setAgentAdminSubmitting(true);
+    setAgentAdminError('');
+    try {
+      const res = await api.login(agentAdminCredentials);
+      if (!res.success) {
+        setAgentAdminError(res.error || (lang === 'ar' ? 'تعذر تسجيل الدخول.' : 'Sign in failed.'));
+      } else if (res.user?.role !== 'admin') {
+        setAgentAdminError(lang === 'ar' ? 'يجب تسجيل الدخول بحساب مسؤول المورّد.' : 'Sign in with a vendor administrator account.');
+      } else {
+        setAgentAdminToken(res.token);
+        setAgentAdminCredentials({ username: '', password: '' });
+      }
+    } finally {
+      setAgentAdminSubmitting(false);
+    }
   };
 
   const loadAllData = async () => {
@@ -99,7 +215,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
 
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '');
-      if (validTabs.includes(hash)) {
+      if (hash === 'commissions') {
+        setActiveTab('settings');
+      } else if (validTabs.includes(hash)) {
         setActiveTabState(hash);
       }
     };
@@ -111,14 +229,90 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!agentAdminToken) {
+      return undefined;
+    }
+
+    let active = true;
+    api.getCollectionAgents(agentAdminToken).then((res) => {
+      if (!active) return;
+      if (res.success) {
+        setCollectionAgents(res.agents || []);
+        setAgentAdminError('');
+      } else {
+        setCollectionAgents([]);
+        setAgentAdminError(res.error || (lang === 'ar' ? 'تعذر تحميل حسابات المحصلين.' : 'Could not load collection agents.'));
+      }
+    });
+
+    return () => { active = false; };
+  }, [agentAdminToken, lang]);
+
   const handleApproveDealer = async (userId, decision) => {
-    const res = await api.approveDealer({ user_id: userId, decision });
+    if (currentUser?.role !== 'admin' || !authToken) {
+      notify(lang === 'ar' ? 'سجّل الدخول بحساب مسؤول المورّد أولاً.' : 'Sign in with a vendor administrator account first.', true);
+      return;
+    }
+    const res = await api.approveDealer({ user_id: userId, decision }, authToken);
     if (res.success) {
       notify(res.message);
       loadAllData();
     } else {
       notify(res.error || "Action failed", true);
     }
+  };
+
+  const handleCreateDealer = async (event) => {
+    event.preventDefault();
+    if (currentUser?.role !== 'admin' || !authToken) {
+      setDealerCreateModal((current) => ({ ...current, error: lang === 'ar' ? 'سجّل الدخول بحساب مسؤول المورّد أولاً.' : 'Sign in with a vendor administrator account first.' }));
+      return;
+    }
+    setDealerCreateModal((current) => ({ ...current, submitting: true, error: '' }));
+    try {
+      const payload = {
+        username: dealerCreateModal.username,
+        full_name: dealerCreateModal.full_name,
+        business_name: dealerCreateModal.business_name,
+        phone: dealerCreateModal.phone,
+        password: dealerCreateModal.password,
+        wilaya: dealerCreateModal.wilaya,
+        commune: dealerCreateModal.commune
+      };
+      const result = await api.createDealer(payload, authToken);
+      if (!result.success) throw new Error(result.error || 'Could not create dealer.');
+      setDealerCreateModal({
+        open: false,
+        username: '',
+        full_name: '',
+        business_name: '',
+        phone: '',
+        password: '',
+        wilaya: '',
+        commune: '',
+        error: '',
+        submitting: false
+      });
+      notify(result.message || (lang === 'ar' ? 'تم إنشاء حساب المحل.' : 'Dealer account created.'));
+      await loadAllData();
+    } catch (error) {
+      setDealerCreateModal((current) => ({ ...current, submitting: false, error: error.message }));
+    }
+  };
+
+  const handleDealerStatus = async (dealer, status) => {
+    if (currentUser?.role !== 'admin' || !authToken) {
+      notify(lang === 'ar' ? 'سجّل الدخول بحساب مسؤول المورّد أولاً.' : 'Sign in with a vendor administrator account first.', true);
+      return;
+    }
+    const result = await api.setDealerStatus({ dealer_id: dealer.id, status }, authToken);
+    if (!result.success) {
+      notify(result.error || (lang === 'ar' ? 'تعذر تحديث حالة المحل.' : 'Could not update dealer status.'), true);
+      return;
+    }
+    notify(result.message);
+    await loadAllData();
   };
 
   const handleAdjustBalance = async (e) => {
@@ -218,18 +412,50 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
   const handleResolveTicket = async (e) => {
     e.preventDefault();
     if (!complaintModal.ticket) return;
-    const res = await api.resolveComplaint({
-      complaint_id: complaintModal.ticket.id,
-      status: complaintModal.status,
-      admin_response: complaintModal.response,
-      refund_to_wallet: complaintModal.refund
-    });
-    if (res.success) {
+    if (currentUser?.role !== 'admin' || !authToken) {
+      notify(lang === 'ar' ? 'يلزم تسجيل الدخول بحساب مسؤول لمعالجة النزاعات.' : 'Sign in as an administrator to resolve disputes.', true);
+      return;
+    }
+    setComplaintSubmitting(true);
+    try {
+      const res = await api.resolveComplaint({
+        complaint_id: complaintModal.ticket.id,
+        status: complaintModal.status,
+        admin_response: complaintModal.response,
+        refund_to_wallet: complaintModal.refund
+      }, authToken);
+      if (res.success) {
+        notify(res.message);
+        setComplaintModal({ open: false, ticket: null, status: 'resolved_confirmed', response: '', refund: false });
+        loadAllData();
+      } else {
+        notify(res.error || "Resolution failed", true);
+      }
+    } finally {
+      setComplaintSubmitting(false);
+    }
+  };
+
+  const handleUndoComplaintRefund = async (e) => {
+    e.preventDefault();
+    if (!undoRefundModal.ticket || !undoRefundModal.confirmed) return;
+    if (currentUser?.role !== 'admin' || !authToken) {
+      notify(lang === 'ar' ? 'يلزم تسجيل الدخول بحساب مسؤول لعكس الاسترجاع.' : 'Sign in as an administrator to undo a refund.', true);
+      return;
+    }
+
+    setUndoRefundSubmitting(true);
+    try {
+      const res = await api.undoComplaintRefund({ complaint_id: undoRefundModal.ticket.id }, authToken);
+      if (!res.success) {
+        notify(res.error || (lang === 'ar' ? 'تعذر عكس الاسترجاع.' : 'Could not undo the refund.'), true);
+        return;
+      }
       notify(res.message);
-      setComplaintModal({ open: false, ticket: null, status: 'resolved_confirmed', response: '', refund: false });
+      setUndoRefundModal({ open: false, ticket: null, confirmed: false });
       loadAllData();
-    } else {
-      notify(res.error || "Resolution failed", true);
+    } finally {
+      setUndoRefundSubmitting(false);
     }
   };
 
@@ -320,7 +546,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
       render: (r) => (
         <div>
           <div style={{ fontFamily: 'monospace', fontWeight: '800', color: 'var(--text-primary)' }}>{r.recharge_ref}</div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{r.created_at}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            {formatDateTime(r.created_at, systemSettings.date_format, lang)}
+          </div>
         </div>
       )
     },
@@ -469,7 +697,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
         );
       }
     }
-  ], [lang, currencyLabel]);
+  ], [lang, currencyLabel, systemSettings.date_format]);
 
   // Dealers Table Columns
   const dealerColumns = [
@@ -539,7 +767,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
       header: lang === 'ar' ? 'الإجراءات' : 'Actions',
       align: 'center',
       render: (d) => (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '8px' }}>
           <button
             onClick={() => openDealerLedger(d)}
             style={{
@@ -558,6 +786,34 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
           >
             <History style={{ width: '14px', height: '14px', color: 'var(--algeria-green)' }} />
             <span>{lang === 'ar' ? 'السجل' : 'Ledger'}</span>
+          </button>
+          <button
+            onClick={() => setDealerPasswordModal({
+              open: true,
+              dealer: d,
+              admin_username: '',
+              admin_password: '',
+              new_password: '',
+              confirm_password: '',
+              error: '',
+              submitting: false
+            })}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              backgroundColor: 'var(--bg-surface-alt)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-primary)',
+              fontWeight: '700',
+              fontSize: '12px',
+              cursor: 'pointer'
+            }}
+          >
+            <KeyRound style={{ width: '14px', height: '14px', color: 'var(--algeria-green)' }} />
+            <span>{lang === 'ar' ? 'إعادة تعيين كلمة المرور' : 'Reset Password'}</span>
           </button>
           {d.status === 'pending' ? (
             <>
@@ -593,25 +849,45 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setBalanceModal({ open: true, dealer: d, amount: '', type: 'credit', notes: '' })}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                border: '1px solid var(--border-strong)',
-                color: 'var(--text-primary)',
-                fontWeight: '700',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              <PlusCircle style={{ width: '14px', height: '14px', color: 'var(--algeria-green)' }} />
-              <span>{lang === 'ar' ? 'شحن / تعديل الرصيد' : 'Adjust Wallet'}</span>
-            </button>
+            <>
+              <button
+                onClick={() => setBalanceModal({ open: true, dealer: d, amount: '', type: 'credit', notes: '' })}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  border: '1px solid var(--border-strong)',
+                  color: 'var(--text-primary)',
+                  fontWeight: '700',
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                <PlusCircle style={{ width: '14px', height: '14px', color: 'var(--algeria-green)' }} />
+                <span>{lang === 'ar' ? 'شحن / تعديل الرصيد' : 'Adjust Wallet'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDealerStatus(d, d.status === 'active' ? 'suspended' : 'active')}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  backgroundColor: d.status === 'active' ? 'var(--algeria-red-light)' : 'var(--algeria-green-light)',
+                  border: `1px solid ${d.status === 'active' ? 'rgba(210,16,52,.3)' : 'rgba(0,135,68,.3)'}`,
+                  color: d.status === 'active' ? 'var(--algeria-red)' : 'var(--algeria-green)',
+                  fontWeight: '700',
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                {d.status === 'active'
+                  ? (lang === 'ar' ? 'إلغاء التفعيل' : 'Deactivate')
+                  : (lang === 'ar' ? 'تفعيل' : 'Activate')}
+              </button>
+            </>
           )}
         </div>
       )
@@ -789,52 +1065,104 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
       render: (c) => (
         <div style={{ textAlign: 'center' }}>
           {!c.status.includes('resolved') ? (
-            <button
-              onClick={() => setComplaintModal({ open: true, ticket: c, status: 'resolved_refunded', response: 'Refund approved by admin', refund: true })}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--algeria-green)',
-                color: '#ffffff',
-                fontWeight: '700',
-                fontSize: '12px',
-                border: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              {lang === 'ar' ? 'معالجة واسترجاع للمحفظة' : 'Resolve & Refund'}
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              {c.recharge_id && c.recharge_status !== 'reversed' && Number(c.net_debited) > 0 ? (
+                <button
+                  disabled={currentUser?.role !== 'admin' || !authToken}
+                  title={currentUser?.role !== 'admin' || !authToken ? (lang === 'ar' ? 'يلزم تسجيل دخول المسؤول' : 'Admin sign-in required') : ''}
+                  onClick={() => setComplaintModal({ open: true, ticket: c, status: 'resolved_refunded', response: 'Refund approved by admin', refund: true })}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--algeria-green)',
+                    color: '#ffffff',
+                    fontWeight: '700',
+                    fontSize: '12px',
+                    border: 'none',
+                    cursor: currentUser?.role === 'admin' && authToken ? 'pointer' : 'not-allowed',
+                    opacity: currentUser?.role === 'admin' && authToken ? 1 : 0.55
+                  }}
+                >
+                  {lang === 'ar' ? 'معالجة واسترجاع للمحفظة' : 'Resolve & Refund'}
+                </button>
+              ) : (
+                <button
+                  disabled={currentUser?.role !== 'admin' || !authToken}
+                  title={currentUser?.role !== 'admin' || !authToken ? (lang === 'ar' ? 'يلزم تسجيل دخول المسؤول' : 'Admin sign-in required') : ''}
+                  onClick={() => setComplaintModal({ open: true, ticket: c, status: 'resolved_confirmed', response: '', refund: false })}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-surface-alt)',
+                    color: 'var(--text-primary)',
+                    fontWeight: '700',
+                    fontSize: '12px',
+                    border: '1px solid var(--border-strong)',
+                    cursor: currentUser?.role === 'admin' && authToken ? 'pointer' : 'not-allowed',
+                    opacity: currentUser?.role === 'admin' && authToken ? 1 : 0.55
+                  }}
+                >
+                  {lang === 'ar' ? 'مراجعة وتسوية' : 'Review & Resolve'}
+                </button>
+              )}
+            </div>
           ) : (
-            <span style={{ color: 'var(--algeria-green)', fontWeight: '700', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <CheckCircle style={{ width: '14px', height: '14px' }} />
-              <span>{lang === 'ar' ? 'تمت التسوية' : 'Settled'}</span>
-            </span>
+            c.status === 'resolved_refunded' && c.recharge_status === 'reversed' ? (
+              <button
+                disabled={currentUser?.role !== 'admin' || !authToken}
+                title={currentUser?.role !== 'admin' || !authToken ? (lang === 'ar' ? 'يلزم تسجيل دخول المسؤول' : 'Admin sign-in required') : ''}
+                onClick={() => setUndoRefundModal({ open: true, ticket: c, confirmed: false })}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  color: 'var(--text-primary)',
+                  fontWeight: '700',
+                  fontSize: '12px',
+                  border: '1px solid var(--border-strong)',
+                  cursor: currentUser?.role === 'admin' && authToken ? 'pointer' : 'not-allowed',
+                  opacity: currentUser?.role === 'admin' && authToken ? 1 : 0.55
+                }}
+              >
+                {lang === 'ar' ? 'عكس الاسترجاع' : 'Undo Refund'}
+              </button>
+            ) : (
+              <span style={{ color: 'var(--algeria-green)', fontWeight: '700', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <CheckCircle style={{ width: '14px', height: '14px' }} />
+                <span>{lang === 'ar' ? 'تمت التسوية' : 'Settled'}</span>
+              </span>
+            )
           )}
         </div>
       )
     }
-  ], [lang, currencyLabel]);
+  ], [lang, currencyLabel, currentUser, authToken]);
 
   const dealerLedgerColumns = useMemo(() => [
     {
       key: 'created_at',
       header: lang === 'ar' ? 'التاريخ' : 'Date',
       sortKey: 'created_at',
-      render: (transaction) => <span style={{ whiteSpace: 'nowrap' }}>{transaction.created_at}</span>
+      render: (transaction) => (
+        <span style={{ whiteSpace: 'nowrap' }}>
+          {formatDateTime(transaction.created_at, systemSettings.date_format, lang)}
+        </span>
+      )
     },
     {
       key: 'type',
       header: lang === 'ar' ? 'النوع' : 'Type',
       sortKey: 'type',
       render: (transaction) => {
-        const isCredit = ['credit_topup', 'commission_credit', 'refund', 'refund_credit'].includes(transaction.type);
+        const isCredit = ['credit_topup', 'commission_credit', 'refund', 'refund_credit', 'debt_payment'].includes(transaction.type);
         const typeLabel = {
           credit_topup: lang === 'ar' ? 'إضافة رصيد' : 'Wallet credit',
           recharge_debit: lang === 'ar' ? 'خصم شحن' : 'Recharge debit',
           commission_credit: lang === 'ar' ? 'عمولة' : 'Commission',
           refund: lang === 'ar' ? 'استرجاع' : 'Refund',
           refund_credit: lang === 'ar' ? 'استرجاع' : 'Refund',
-          adjustment: lang === 'ar' ? 'تعديل' : 'Adjustment'
+          adjustment: lang === 'ar' ? 'تعديل' : 'Adjustment',
+          debt_payment: lang === 'ar' ? 'سداد دين نقدي' : 'Cash debt payment'
         }[transaction.type] || transaction.type;
         return (
           <span style={{ color: isCredit ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: '800', whiteSpace: 'nowrap' }}>
@@ -877,7 +1205,40 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
         </div>
       )
     }
-  ], [lang, currencyLabel]);
+  ], [lang, currencyLabel, systemSettings.date_format]);
+
+  const settingsTabNavigation = (
+    <div
+      role="tablist"
+      aria-label={t.navSettings}
+      style={{ display: 'flex', gap: '8px', marginBottom: '22px', borderBottom: '1px solid var(--border-subtle)' }}
+    >
+      {[
+        { id: 'general', label: t.generalSettingsTab },
+        { id: 'operators', label: t.operatorRatesTab }
+      ].map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={settingsSection === tab.id}
+          onClick={() => setSettingsSection(tab.id)}
+          style={{
+            padding: '10px 16px',
+            border: 'none',
+            borderBottom: `3px solid ${settingsSection === tab.id ? 'var(--algeria-green)' : 'transparent'}`,
+            background: 'transparent',
+            color: settingsSection === tab.id ? 'var(--algeria-green)' : 'var(--text-secondary)',
+            fontSize: '13px',
+            fontWeight: 800,
+            cursor: 'pointer'
+          }}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="erp-container">
@@ -905,19 +1266,322 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
         </div>
       )}
 
+      {agentModal.open && (
+        <div className="modal-overlay" onClick={() => !agentSubmitting && setAgentModal({ open: false, username: '', full_name: '', phone: '', password: '' })}>
+          <form
+            className="modal-card"
+            onSubmit={handleCreateAgent}
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(460px, 94vw)' }}
+          >
+            <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
+              {lang === 'ar' ? 'إنشاء حساب محصل' : 'Create Collection Agent'}
+            </h3>
+            <p style={{ margin: '0 0 18px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {lang === 'ar' ? 'سيستخدم المحصل هذه البيانات لتسجيل الدخول إلى تطبيق الهاتف.' : 'The agent will use these credentials to sign in to the mobile app.'}
+            </p>
+            {[
+              ['full_name', lang === 'ar' ? 'الاسم الكامل' : 'Full name', 'text'],
+              ['username', lang === 'ar' ? 'اسم المستخدم' : 'Username', 'text'],
+              ['phone', lang === 'ar' ? 'رقم الهاتف' : 'Phone number', 'tel'],
+              ['password', lang === 'ar' ? 'كلمة المرور (8 أحرف على الأقل)' : 'Password (at least 8 characters)', 'password']
+            ].map(([field, label, type]) => (
+              <label key={field} style={{ display: 'block', marginBottom: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                {label}
+                <input
+                  required
+                  minLength={field === 'password' ? 8 : undefined}
+                  type={type}
+                  value={agentModal[field]}
+                  onChange={(event) => setAgentModal((current) => ({ ...current, [field]: event.target.value }))}
+                  className="filter-input"
+                  style={{ display: 'block', width: '100%', marginTop: '5px', boxSizing: 'border-box' }}
+                />
+              </label>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+              <button type="button" disabled={agentSubmitting} onClick={() => setAgentModal({ open: false, username: '', full_name: '', phone: '', password: '' })} style={{ padding: '9px 14px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button type="submit" disabled={agentSubmitting} style={{ padding: '9px 14px', border: 'none', borderRadius: '8px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: agentSubmitting ? 'wait' : 'pointer' }}>
+                {agentSubmitting ? (lang === 'ar' ? 'جارٍ الإنشاء...' : 'Creating...') : (lang === 'ar' ? 'إنشاء الحساب' : 'Create account')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {dealerPasswordModal.open && (
+        <div
+          className="modal-overlay"
+          onClick={() => !dealerPasswordModal.submitting && setDealerPasswordModal((current) => ({ ...current, open: false }))}
+        >
+          <form
+            className="modal-card"
+            onSubmit={handleResetDealerPassword}
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(460px, 94vw)' }}
+          >
+            <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
+              {lang === 'ar' ? 'إعادة تعيين كلمة مرور الموزّع' : 'Reset Dealer Password'}
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {dealerPasswordModal.dealer?.full_name}{dealerPasswordModal.dealer?.business_name ? ` · ${dealerPasswordModal.dealer.business_name}` : ''}
+              {' — '}
+              {lang === 'ar' ? 'أدخل بيانات مسؤول المورّد وكلمة مرور جديدة.' : 'Verify your vendor admin account and enter a new password.'}
+            </p>
+            {[
+              ['admin_username', lang === 'ar' ? 'اسم مستخدم مسؤول المورّد' : 'Admin username or phone', 'text', 'username'],
+              ['admin_password', lang === 'ar' ? 'كلمة مرور مسؤول المورّد' : 'Admin password', 'password', 'current-password'],
+              ['new_password', lang === 'ar' ? 'كلمة المرور الجديدة (8 أحرف على الأقل)' : 'New dealer password (at least 8 characters)', 'password', 'new-password'],
+              ['confirm_password', lang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new dealer password', 'password', 'new-password']
+            ].map(([field, label, type, autoComplete]) => (
+              <label key={field} style={{ display: 'block', marginBottom: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                {label}
+                <input
+                  required
+                  minLength={field === 'new_password' || field === 'confirm_password' ? 8 : undefined}
+                  type={type}
+                  autoComplete={autoComplete}
+                  value={dealerPasswordModal[field]}
+                  onChange={(event) => setDealerPasswordModal((current) => ({ ...current, [field]: event.target.value, error: '' }))}
+                  className="filter-input"
+                  style={{ display: 'block', width: '100%', marginTop: '5px', boxSizing: 'border-box' }}
+                />
+              </label>
+            ))}
+            {dealerPasswordModal.error && (
+              <p role="alert" style={{ color: 'var(--algeria-red)', fontSize: '12px', fontWeight: 700 }}>{dealerPasswordModal.error}</p>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+              <button
+                type="button"
+                disabled={dealerPasswordModal.submitting}
+                onClick={() => setDealerPasswordModal((current) => ({ ...current, open: false }))}
+                style={{ padding: '9px 14px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={dealerPasswordModal.submitting}
+                style={{ padding: '9px 14px', border: 'none', borderRadius: '8px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: dealerPasswordModal.submitting ? 'wait' : 'pointer' }}
+              >
+                {dealerPasswordModal.submitting
+                  ? (lang === 'ar' ? 'جارٍ إعادة التعيين...' : 'Resetting...')
+                  : (lang === 'ar' ? 'إعادة تعيين كلمة المرور' : 'Reset Password')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {dealerCreateModal.open && (
+        <div
+          className="modal-overlay"
+          onClick={() => !dealerCreateModal.submitting && setDealerCreateModal((current) => ({ ...current, open: false }))}
+        >
+          <form
+            className="modal-card"
+            onSubmit={handleCreateDealer}
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(540px, 94vw)', maxHeight: '90vh', overflowY: 'auto' }}
+          >
+            <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
+              {lang === 'ar' ? 'إنشاء حساب محل جديد' : 'Create New Dealer'}
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {lang === 'ar' ? 'سيتم تفعيل الحساب مباشرة. شارك بيانات الدخول مع صاحب المحل بأمان.' : 'The dealer account will be active immediately. Share the sign-in details securely with the shopkeeper.'}
+            </p>
+            {!authToken || currentUser?.role !== 'admin' ? (
+              <p style={{ padding: '10px 12px', borderRadius: '9px', background: 'var(--algeria-gold-light)', color: 'var(--text-primary)', fontSize: '12px', fontWeight: 700 }}>
+                {lang === 'ar' ? 'سجّل الدخول كمسؤول مورّد من زر تسجيل الدخول أعلى الصفحة قبل الإنشاء.' : 'Sign in as a vendor administrator using the sign-in button at the top before creating a dealer.'}
+              </p>
+            ) : null}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
+              {[
+                ['full_name', lang === 'ar' ? 'اسم صاحب المحل' : 'Shopkeeper full name', 'text'],
+                ['business_name', lang === 'ar' ? 'اسم المحل' : 'Shop name', 'text'],
+                ['username', lang === 'ar' ? 'اسم المستخدم' : 'Username', 'text'],
+                ['phone', lang === 'ar' ? 'رقم الهاتف' : 'Phone number', 'tel'],
+                ['wilaya', lang === 'ar' ? 'الولاية' : 'Wilaya', 'text'],
+                ['commune', lang === 'ar' ? 'البلدية' : 'Commune', 'text'],
+                ['password', lang === 'ar' ? 'كلمة المرور (8 أحرف على الأقل)' : 'Password (at least 8 characters)', 'password']
+              ].map(([field, label, type]) => (
+                <label key={field} style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  {label}
+                  <input
+                    required={!['wilaya', 'commune'].includes(field)}
+                    minLength={field === 'password' ? 8 : undefined}
+                    autoComplete={field === 'password' ? 'new-password' : undefined}
+                    type={type}
+                    value={dealerCreateModal[field]}
+                    onChange={(event) => setDealerCreateModal((current) => ({ ...current, [field]: event.target.value, error: '' }))}
+                    className="filter-input"
+                    style={{ display: 'block', width: '100%', marginTop: '5px', boxSizing: 'border-box' }}
+                  />
+                </label>
+              ))}
+            </div>
+            {dealerCreateModal.error && <p role="alert" style={{ color: 'var(--algeria-red)', fontSize: '12px', fontWeight: 700 }}>{dealerCreateModal.error}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+              <button
+                type="button"
+                disabled={dealerCreateModal.submitting}
+                onClick={() => setDealerCreateModal((current) => ({ ...current, open: false }))}
+                style={{ padding: '9px 14px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={dealerCreateModal.submitting || currentUser?.role !== 'admin' || !authToken}
+                style={{ padding: '9px 14px', border: 'none', borderRadius: '8px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: dealerCreateModal.submitting ? 'wait' : 'pointer' }}
+              >
+                {dealerCreateModal.submitting
+                  ? (lang === 'ar' ? 'جارٍ الإنشاء...' : 'Creating...')
+                  : (lang === 'ar' ? 'إنشاء المحل' : 'Create Dealer')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Horizontal Menu Bar Directly Under the Header */}
       <nav className="horizontal-nav-bar">
         {/* Horizontal Navigation Items */}
         <div className="horizontal-nav-menu">
           {[
-            { id: 'dashboard', label: t.navDashboard, icon: LayoutDashboard },
-            { id: 'dealers', label: t.navDealers, icon: Users, badge: stats?.pending_dealers },
-            { id: 'recharges', label: t.navRecharges, icon: History },
-            { id: 'topups', label: t.navTopups, icon: CreditCard, badge: stats?.pending_topups },
-            { id: 'commissions', label: t.navCommissions, icon: Percent },
-            { id: 'complaints', label: t.navComplaints, icon: LifeBuoy, badge: stats?.open_complaints },
-            { id: 'settings', label: t.navSettings, icon: Settings }
+            { id: 'dashboard', label: t.navDashboard, icon: LayoutDashboard }
           ].map(item => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                id={`nav-tab-${item.id}`}
+                onClick={() => setActiveTab(item.id)}
+                className={`horizontal-nav-item ${isActive ? 'active' : ''}`}
+              >
+                <Icon style={{ width: '16px', height: '16px' }} />
+                <span>{item.label}</span>
+                {item.badge > 0 && (
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    backgroundColor: isActive ? '#ffffff' : '#d21034',
+                    color: isActive ? '#008744' : '#ffffff'
+                  }}>
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          <div
+            style={{ position: 'relative' }}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setNavMenuOpen(false);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setNavMenuOpen(false);
+            }}
+          >
+            <button
+              id="nav-tab-operations"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={navMenuOpen}
+              onClick={() => setNavMenuOpen((open) => !open)}
+              className={`horizontal-nav-item ${
+                ['dealers', 'recharges', 'complaints', 'collection_agents'].includes(activeTab) ? 'active' : ''
+              }`}
+            >
+              <Menu style={{ width: '16px', height: '16px' }} />
+              <span>{t.navOperations}</span>
+              <ChevronDown style={{
+                width: '14px',
+                height: '14px',
+                transform: navMenuOpen ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s'
+              }} />
+            </button>
+            {navMenuOpen && (
+              <div
+                role="menu"
+                aria-label={t.navOperations}
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  insetInlineStart: 0,
+                  zIndex: 100,
+                  minWidth: '250px',
+                  padding: '8px',
+                  backgroundColor: 'var(--bg-surface)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: '12px',
+                  boxShadow: '0 15px 35px rgba(0,0,0,0.3)'
+                }}
+              >
+                {[
+                  { id: 'dealers', label: t.navDealers, icon: Users, badge: stats?.pending_dealers },
+                  { id: 'recharges', label: t.navRecharges, icon: History },
+                  { id: 'complaints', label: t.navComplaints, icon: LifeBuoy, badge: stats?.open_complaints },
+                  { id: 'collection_agents', label: lang === 'ar' ? 'محصلو الديون' : 'Collection Agents', icon: Users }
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setNavMenuOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        border: 'none',
+                        borderRadius: '8px',
+                        backgroundColor: isActive ? 'var(--algeria-green)' : 'transparent',
+                        color: isActive ? '#ffffff' : 'var(--text-primary)',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        textAlign: 'start',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Icon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {item.badge > 0 && (
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          backgroundColor: isActive ? '#ffffff' : '#d21034',
+                          color: isActive ? '#008744' : '#ffffff'
+                        }}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {[
+            { id: 'topups', label: t.navTopups, icon: CreditCard, badge: stats?.pending_topups },
+            { id: 'settings', label: t.navSettings, icon: Settings }
+          ].map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -946,125 +1610,8 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
           })}
         </div>
 
-        {/* Horizontal Ticker with Operators Dropdown & Live Refresh */}
+        {/* Horizontal ticker with live refresh */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-          {/* Operator Rates Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <button
-              id="btn-operator-rates-dropdown"
-              onClick={() => setOpDropdownOpen(!opDropdownOpen)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 14px',
-                borderRadius: '10px',
-                backgroundColor: opDropdownOpen ? 'var(--algeria-green)' : 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#ffffff',
-                fontSize: '12.5px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#008744' }} />
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#d21034' }} />
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ed1c24' }} />
-              </div>
-              <span>{lang === 'ar' ? 'نسب العمولات' : 'Commissions'}</span>
-              <span style={{ color: '#34d399', fontFamily: 'monospace', fontWeight: '800' }}>
-                5% / 4.5% / 5.2%
-              </span>
-              <ChevronDown style={{ width: '14px', height: '14px', transform: opDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-            </button>
-
-            {/* Dropdown Menu Popup */}
-            {opDropdownOpen && (
-              <div style={{
-                position: 'absolute',
-                top: 'calc(100% + 8px)',
-                [lang === 'ar' ? 'left' : 'right']: 0,
-                zIndex: 100,
-                width: '280px',
-                backgroundColor: 'var(--bg-surface)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: '14px',
-                padding: '12px',
-                boxShadow: '0 15px 35px rgba(0,0,0,0.3)',
-                animation: 'modalPop 0.15s ease-out'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-primary)' }}>
-                    {lang === 'ar' ? 'نسب العمولات المقتطعة' : 'Commission Discount Rates'}
-                  </span>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    {lang === 'ar' ? 'خصم فوري' : 'Instant Discount'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {operators.map(op => (
-                    <div key={op.id} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      backgroundColor: 'var(--bg-surface-alt)',
-                      border: '1px solid var(--border-subtle)'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: op.color_hex }} />
-                        <div>
-                          <strong style={{ fontSize: '12px', display: 'block', color: 'var(--text-primary)' }}>
-                            {lang === 'ar' ? op.name_ar : op.name}
-                          </strong>
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                            {op.prefixes}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div style={{ textAlign: 'end' }}>
-                        <strong style={{ fontSize: '13px', color: 'var(--algeria-green)', fontFamily: 'monospace' }}>
-                          {op.default_commission_pct}%
-                        </strong>
-                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block' }}>
-                          {lang === 'ar' ? 'عمولة' : 'Discount'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('commissions');
-                    setOpDropdownOpen(false);
-                  }}
-                  style={{
-                    width: '100%',
-                    marginTop: '10px',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    backgroundColor: 'var(--algeria-green-light)',
-                    color: 'var(--algeria-green)',
-                    fontWeight: '800',
-                    fontSize: '11.5px',
-                    border: '1px solid rgba(0,135,68,0.2)',
-                    cursor: 'pointer',
-                    textAlign: 'center'
-                  }}
-                >
-                  {lang === 'ar' ? '⚙️ تعديل نسب العمولات والحدود' : '⚙️ Configure Commission Rules'}
-                </button>
-              </div>
-            )}
-          </div>
-
           <button
             onClick={loadAllData}
             style={{
@@ -1497,8 +2044,26 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                   {lang === 'ar' ? 'إدارة حسابات الموزعين، اعتماد المحلات الجديدة، وضبط الأرصدة والسقوف الائتمانية' : 'Manage dealer KYC, approvals, wallet balances, and credit limits.'}
                 </span>
               </div>
+              <button
+                type="button"
+                onClick={() => setDealerCreateModal({
+                  open: true,
+                  username: '',
+                  full_name: '',
+                  business_name: '',
+                  phone: '',
+                  password: '',
+                  wilaya: '',
+                  commune: '',
+                  error: '',
+                  submitting: false
+                })}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', padding: '10px 14px', border: 'none', borderRadius: '9px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+              >
+                <PlusCircle style={{ width: '16px', height: '16px' }} />
+                {lang === 'ar' ? 'إضافة محل جديد' : 'Add New Dealer'}
+              </button>
             </div>
-
             <DataTable
               columns={dealerColumns}
               data={dealers}
@@ -1509,6 +2074,104 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
               defaultSortDir="asc"
               lang={lang}
               searchPlaceholder={lang === 'ar' ? 'بحث فوري في الموزعين (الاسم، الهاتف، الولاية)...' : 'Search dealers (name, phone, wilaya)...'}
+            />
+          </div>
+        )}
+
+        {activeTab === 'collection_agents' && !agentAdminToken && (
+          <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+            <div className="erp-table-container" style={{ width: '100%', maxWidth: '560px', margin: '0 auto', padding: '24px', boxSizing: 'border-box' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', marginTop: 0 }}>
+              {lang === 'ar' ? 'تسجيل دخول مسؤول المورّد' : 'Vendor administrator sign in'}
+            </h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {lang === 'ar' ? 'يمكن لمسؤول المورّد فقط إنشاء حسابات المحصلين وإدارتها.' : 'Only vendor administrators can create and manage collection agent accounts.'}
+            </p>
+            <form onSubmit={handleAgentAdminLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '18px' }}>
+              <input
+                required
+                autoComplete="username"
+                value={agentAdminCredentials.username}
+                onChange={(event) => setAgentAdminCredentials((current) => ({ ...current, username: event.target.value }))}
+                placeholder={lang === 'ar' ? 'اسم المستخدم أو الهاتف' : 'Username or phone'}
+                className="filter-input"
+              />
+              <input
+                required
+                type="password"
+                autoComplete="current-password"
+                value={agentAdminCredentials.password}
+                onChange={(event) => setAgentAdminCredentials((current) => ({ ...current, password: event.target.value }))}
+                placeholder={lang === 'ar' ? 'كلمة المرور' : 'Password'}
+                className="filter-input"
+              />
+              {agentAdminError && <p role="alert" style={{ color: 'var(--algeria-red)', fontSize: '12px', margin: 0 }}>{agentAdminError}</p>}
+              <button type="submit" disabled={agentAdminSubmitting} style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: agentAdminSubmitting ? 'wait' : 'pointer' }}>
+                {agentAdminSubmitting ? (lang === 'ar' ? 'جارٍ التحقق...' : 'Signing in...') : (lang === 'ar' ? 'تسجيل الدخول' : 'Sign in')}
+              </button>
+            </form>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'collection_agents' && agentAdminToken && (
+          <div className="erp-table-container">
+            <div className="erp-table-header">
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
+                  {lang === 'ar' ? 'محصلو الديون' : 'Collection Agents'}
+                </h2>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {lang === 'ar' ? 'إنشاء حسابات المحصلين وإدارة صلاحية دخولهم إلى تطبيق التحصيل.' : 'Create and manage accounts for agents collecting dealer debt.'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAgentModal({ open: true, username: '', full_name: '', phone: '', password: '' })}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', padding: '10px 14px', border: 'none', borderRadius: '9px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+              >
+                <PlusCircle style={{ width: '16px', height: '16px' }} />
+                {lang === 'ar' ? 'إضافة محصل' : 'Add Collection Agent'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAgentAdminToken(null);
+                  setCollectionAgents([]);
+                  setAgentAdminError('');
+                }}
+                style={{ padding: '9px 12px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                {lang === 'ar' ? 'تسجيل الخروج' : 'Sign out'}
+              </button>
+            </div>
+            {agentAdminError && <p role="alert" style={{ color: 'var(--algeria-red)', fontSize: '12px' }}>{agentAdminError}</p>}
+            <DataTable
+              columns={[
+                { key: 'full_name', header: lang === 'ar' ? 'الاسم الكامل' : 'Full name', sortKey: 'full_name' },
+                { key: 'username', header: lang === 'ar' ? 'اسم المستخدم' : 'Username', sortKey: 'username' },
+                { key: 'phone', header: lang === 'ar' ? 'الهاتف' : 'Phone', sortKey: 'phone' },
+                {
+                  key: 'status',
+                  header: lang === 'ar' ? 'الحالة' : 'Status',
+                  sortKey: 'status',
+                  render: (agent) => (
+                    <span style={{ color: agent.status === 'active' ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: 700 }}>
+                      {agent.status}
+                    </span>
+                  )
+                },
+                { key: 'last_login', header: lang === 'ar' ? 'آخر دخول' : 'Last login', sortKey: 'last_login' }
+              ]}
+              data={collectionAgents}
+              keyField="id"
+              defaultPageSize={10}
+              pageSizeOptions={[5, 10, 25, 50]}
+              defaultSortField="id"
+              defaultSortDir="desc"
+              lang={lang}
+              searchPlaceholder={lang === 'ar' ? 'بحث عن محصل بالاسم أو الهاتف...' : 'Search agents by name or phone...'}
+              emptyMessage={lang === 'ar' ? 'لا يوجد محصلون. أضف أول حساب محصل.' : 'No collection agents yet. Add the first agent account.'}
             />
           </div>
         )}
@@ -1607,9 +2270,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
           </div>
         )}
 
-        {/* TAB 5: COMMISSIONS & OPERATOR RULES */}
-        {activeTab === 'commissions' && (
+        {/* Operator rates are managed under Settings */}
+        {activeTab === 'settings' && settingsSection === 'operators' && (
           <div>
+            {settingsTabNavigation}
             <div style={{ marginBottom: '20px' }}>
               <h2 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
                 {t.navCommissions}
@@ -1713,7 +2377,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                   {t.navComplaints}
                 </h2>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {lang === 'ar' ? 'تذاكر شكاوى الموزعين للعمليات المعلقة أو الفاشلة مع إمكانية استرجاع الرصيد بنقرة واحدة' : 'Resolve dealer recharge disputes with one-click wallet refunds.'}
+                  {lang === 'ar' ? 'مراجعة نزاعات الشحن وإلغاء العملية وإعادة المبلغ إلى محفظة الموزع بعد تأكيد المسؤول' : 'Review recharge disputes and, when needed, reverse a transaction with an admin-confirmed dealer wallet refund.'}
                 </span>
               </div>
             </div>
@@ -1733,8 +2397,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
         )}
 
         {/* TAB 7: SETTINGS */}
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && settingsSection === 'general' && (
           <div className="erp-table-container" style={{ padding: '28px', maxWidth: '700px' }}>
+            {settingsTabNavigation}
             <h2 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '6px' }}>
               {t.navSettings}
             </h2>
@@ -1796,6 +2461,12 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                   className="filter-input"
                   style={{ width: '100%', fontSize: '14px', fontFamily: 'monospace' }}
                 />
+                <span style={{ display: 'block', marginTop: '6px', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                  {lang === 'ar' ? 'معاينة:' : 'Preview:'}{' '}
+                  <strong style={{ color: 'var(--text-primary)' }}>
+                    {formatDateTime('2026-10-30 14:05:09', systemSettings.date_format, lang)}
+                  </strong>
+                </span>
               </div>
 
               <button
@@ -1947,7 +2618,12 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                   className="filter-input"
                   style={{ width: '100%', fontSize: '14px', fontWeight: '700' }}
                 >
-                  <option value="resolved_refunded">{lang === 'ar' ? 'استرجاع الرصيد للمحفظة فوراً (إلغاء العملية)' : 'Refund to Dealer Wallet'}</option>
+                  <option
+                    value="resolved_refunded"
+                    disabled={!complaintModal.ticket?.recharge_id || complaintModal.ticket?.recharge_status === 'reversed' || Number(complaintModal.ticket?.net_debited) <= 0}
+                  >
+                    {lang === 'ar' ? 'استرجاع الرصيد للمحفظة فوراً (إلغاء العملية)' : 'Refund to Dealer Wallet'}
+                  </option>
                   <option value="resolved_confirmed">{lang === 'ar' ? 'تأكيد وصول الرصيد للزبون' : 'Confirmed Delivered by Operator'}</option>
                   <option value="rejected">{lang === 'ar' ? 'رفض الشكوى' : 'Reject Dispute'}</option>
                 </select>
@@ -1977,9 +2653,56 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                 </button>
                 <button
                   type="submit"
-                  style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--algeria-green)', color: '#ffffff', fontWeight: '800', cursor: 'pointer' }}
+                  disabled={complaintSubmitting}
+                  style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--algeria-green)', color: '#ffffff', fontWeight: '800', cursor: complaintSubmitting ? 'not-allowed' : 'pointer', opacity: complaintSubmitting ? 0.6 : 1 }}
                 >
-                  {lang === 'ar' ? 'تطبيق القرار' : 'Apply'}
+                  {complaintSubmitting
+                    ? (lang === 'ar' ? 'جارٍ التنفيذ...' : 'Processing...')
+                    : (lang === 'ar' ? 'تطبيق القرار' : 'Apply')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {undoRefundModal.open && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '6px', color: 'var(--text-primary)' }}>
+              {lang === 'ar' ? 'عكس استرجاع الرصيد' : 'Undo Wallet Refund'}
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+              {undoRefundModal.ticket?.ticket_ref} - {undoRefundModal.ticket?.dealer_name}
+            </p>
+            <p style={{ fontSize: '13px', marginBottom: '12px' }}>
+              {lang === 'ar'
+                ? `سيتم خصم ${Number(undoRefundModal.ticket?.net_debited || 0).toLocaleString()} ${currencyLabel} من محفظة الموزع. ستبقى عملية الشحن معكوسة، وستعود الشكوى إلى قيد التحقيق.`
+                : `${Number(undoRefundModal.ticket?.net_debited || 0).toLocaleString()} ${currencyLabel} will be debited from the dealer wallet. The recharge stays reversed and the dispute returns to Investigating.`}
+            </p>
+            <form onSubmit={handleUndoComplaintRefund} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={undoRefundModal.confirmed}
+                  onChange={(e) => setUndoRefundModal(prev => ({ ...prev, confirmed: e.target.checked }))}
+                />
+                <span>{lang === 'ar' ? 'أؤكد خصم مبلغ الاسترجاع وإعادة فتح النزاع.' : 'I confirm debiting the refund and reopening this dispute.'}</span>
+              </label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setUndoRefundModal({ open: false, ticket: null, confirmed: false })}
+                  style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-primary)', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={undoRefundSubmitting || !undoRefundModal.confirmed}
+                  style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--algeria-green)', color: '#ffffff', fontWeight: '800', cursor: undoRefundSubmitting || !undoRefundModal.confirmed ? 'not-allowed' : 'pointer', opacity: undoRefundSubmitting || !undoRefundModal.confirmed ? 0.6 : 1 }}
+                >
+                  {undoRefundSubmitting ? (lang === 'ar' ? 'جارٍ التنفيذ...' : 'Processing...') : (lang === 'ar' ? 'تأكيد عكس الاسترجاع' : 'Confirm Undo Refund')}
                 </button>
               </div>
             </form>
@@ -2247,7 +2970,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                         : (lang === 'ar' ? 'خصم شحن' : 'Recharge');
                     return (
                       <tr key={transaction.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>{transaction.created_at}</td>
+                        <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
+                          {formatDateTime(transaction.created_at, systemSettings.date_format, lang)}
+                        </td>
                         <td style={{ padding: '10px', color: isCredit ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: '800', whiteSpace: 'nowrap' }}>{typeLabel}</td>
                         <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.amount).toLocaleString()} {currencyLabel}</td>
                         <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_before).toLocaleString()}</td>
@@ -2290,6 +3015,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal }) {
                   {' · '}
                   {lang === 'ar' ? 'السقف الائتماني:' : 'Credit limit:'}{' '}
                   <strong>{parseFloat(dealerLedgerModal.dealer?.credit_limit || 0).toLocaleString()} {currencyLabel}</strong>
+                  {' · '}
+                  {lang === 'ar' ? 'الدين المستحق:' : 'Outstanding debt:'}{' '}
+                  <strong style={{ color: 'var(--algeria-red)' }}>{parseFloat(dealerLedgerModal.dealer?.outstanding_debt || 0).toLocaleString()} {currencyLabel}</strong>
                 </p>
               </div>
               <button

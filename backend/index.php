@@ -29,6 +29,34 @@ function getRequestJson(): array {
     return is_array($data) ? $data : [];
 }
 
+function requireAuthenticatedRole(PDO $pdo, array $config, string|array $requiredRoles): array {
+    $requiredRoles = is_array($requiredRoles) ? $requiredRoles : [$requiredRoles];
+    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (!preg_match('/^Bearer\s+(.+)$/i', $header, $matches)) {
+        jsonResponse(['success' => false, 'error' => 'Authentication is required.'], 401);
+    }
+
+    $parts = explode('.', $matches[1], 2);
+    if (count($parts) !== 2 || !hash_equals(hash_hmac('sha256', $parts[0], $config['jwt_secret']), $parts[1])) {
+        jsonResponse(['success' => false, 'error' => 'Invalid session. Please sign in again.'], 401);
+    }
+
+    $claims = json_decode(base64_decode($parts[0], true) ?: '', true);
+    if (!is_array($claims) || !in_array($claims['role'] ?? '', $requiredRoles, true) || intval($claims['exp'] ?? 0) < time()) {
+        jsonResponse(['success' => false, 'error' => 'Session has expired or does not have permission. Please sign in again.'], 401);
+    }
+
+    $rolePlaceholders = implode(', ', array_fill(0, count($requiredRoles), '?'));
+    $stmt = $pdo->prepare("SELECT id, full_name, status, role, collection_owner_id FROM users WHERE id = ? AND role IN ({$rolePlaceholders})");
+    $stmt->execute(array_merge([intval($claims['uid'] ?? 0)], $requiredRoles));
+    $user = $stmt->fetch();
+    if (!$user || $user['status'] !== 'active') {
+        jsonResponse(['success' => false, 'error' => 'This account is not active.'], 403);
+    }
+
+    return $user;
+}
+
 try {
     $pdo = Database::getConnection();
 } catch (Throwable $e) {
@@ -104,7 +132,7 @@ if ($route === '/api/auth/login' && $method === 'POST') {
     }
 
     // Verify password (supports bcrypt or fallback plain test for development)
-    $verified = password_verify($password, $user['password_hash']) || ($password === 'admin123' && $user['role'] === 'admin') || ($password === 'dealer123' && $user['role'] === 'dealer');
+    $verified = password_verify($password, $user['password_hash']) || ($password === 'admin123' && $user['role'] === 'admin');
 
     if (!$verified) {
         jsonResponse(['success' => false, 'error' => 'Incorrect password.'], 401);
@@ -119,11 +147,12 @@ if ($route === '/api/auth/login' && $method === 'POST') {
     }
 
     // Generate lightweight mock JWT token
-    $token = base64_encode(json_encode([
+    $tokenPayload = base64_encode(json_encode([
         'uid' => $user['id'],
         'role' => $user['role'],
         'exp' => time() + 86400
     ]));
+    $token = $tokenPayload . '.' . hash_hmac('sha256', $tokenPayload, $config['jwt_secret']);
 
     // Update last login
     $nowStr = date('Y-m-d H:i:s');
@@ -136,6 +165,33 @@ if ($route === '/api/auth/login' && $method === 'POST') {
         'token' => $token,
         'user' => $user
     ]);
+}
+
+if ($route === '/api/auth/change-password' && $method === 'POST') {
+    $dealer = requireAuthenticatedRole($pdo, $config, 'dealer');
+    $input = getRequestJson();
+    $currentPassword = is_string($input['current_password'] ?? null) ? $input['current_password'] : '';
+    $newPassword = is_string($input['new_password'] ?? null) ? $input['new_password'] : '';
+
+    if ($currentPassword === '' || strlen($newPassword) < 8) {
+        jsonResponse(['success' => false, 'error' => 'Enter your current password and a new password of at least 8 characters.'], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT password_hash FROM users WHERE id = ? AND role = 'dealer'");
+    $stmt->execute([$dealer['id']]);
+    $passwordHash = $stmt->fetchColumn();
+    if (!$passwordHash || !password_verify($currentPassword, $passwordHash)) {
+        jsonResponse(['success' => false, 'error' => 'Current password is incorrect.'], 401);
+    }
+    if (password_verify($newPassword, $passwordHash)) {
+        jsonResponse(['success' => false, 'error' => 'Choose a password different from your current password.'], 400);
+    }
+
+    $now = date('Y-m-d H:i:s');
+    $update = $pdo->prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND role = 'dealer'");
+    $update->execute([password_hash($newPassword, PASSWORD_BCRYPT), $now, $dealer['id']]);
+
+    jsonResponse(['success' => true, 'message' => 'Password changed successfully.']);
 }
 
 // Dealer Registration
@@ -171,6 +227,246 @@ if ($route === '/api/auth/register' && $method === 'POST') {
         'success' => true,
         'message' => 'Registration submitted successfully! Your account is pending Admin approval.'
     ], 201);
+}
+
+if ($route === '/api/collection/agents' && $method === 'GET') {
+    $viewer = requireAuthenticatedRole($pdo, $config, ['admin', 'dealer']);
+    if ($viewer['role'] === 'admin') {
+        $stmt = $pdo->query("
+            SELECT id, username, phone, full_name, status, created_at, last_login
+            FROM users
+            WHERE role = 'collection_agent'
+            ORDER BY id DESC
+        ");
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT id, username, phone, full_name, status, created_at, last_login
+            FROM users
+            WHERE role = 'collection_agent' AND collection_owner_id = ?
+            ORDER BY id DESC
+        ");
+        $stmt->execute([$viewer['id']]);
+    }
+    jsonResponse(['success' => true, 'agents' => $stmt->fetchAll()]);
+}
+
+if ($route === '/api/collection/agents' && $method === 'POST') {
+    requireAuthenticatedRole($pdo, $config, 'admin');
+    $input = getRequestJson();
+    $username = is_string($input['username'] ?? null) ? trim($input['username']) : '';
+    $phone = is_string($input['phone'] ?? null) ? trim($input['phone']) : '';
+    $fullName = is_string($input['full_name'] ?? null) ? trim($input['full_name']) : '';
+    $password = is_string($input['password'] ?? null) ? $input['password'] : '';
+
+    if ($username === '' || $phone === '' || $fullName === '' || strlen($password) < 8) {
+        jsonResponse(['success' => false, 'error' => 'Name, username, phone, and a password of at least 8 characters are required.'], 400);
+    }
+
+    $check = $pdo->prepare("SELECT id FROM users WHERE username = ? OR phone = ?");
+    $check->execute([$username, $phone]);
+    if ($check->fetch()) {
+        jsonResponse(['success' => false, 'error' => 'Username or phone number is already in use.'], 409);
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO users (username, phone, password_hash, role, collection_owner_id, full_name, status)
+            VALUES (?, ?, ?, 'collection_agent', ?, ?, 'active')
+        ");
+        $stmt->execute([$username, $phone, password_hash($password, PASSWORD_BCRYPT), null, $fullName]);
+    } catch (PDOException $e) {
+        if (Database::getDriver() === 'mysql' && str_contains($e->getMessage(), 'Duplicate')) {
+            jsonResponse(['success' => false, 'error' => 'Username or phone number is already in use.'], 409);
+        }
+        throw $e;
+    }
+
+    jsonResponse(['success' => true, 'message' => 'Collection agent account created.'], 201);
+}
+
+if ($route === '/api/collection/dealers' && $method === 'GET') {
+    $agent = requireAuthenticatedRole($pdo, $config, 'collection_agent');
+    if ($agent['collection_owner_id'] === null) {
+        $stmt = $pdo->query("
+            SELECT id, full_name, business_name, phone, wilaya, commune, wallet_balance, credit_limit, outstanding_debt
+            FROM users
+            WHERE role = 'dealer' AND status = 'active'
+            ORDER BY full_name ASC
+        ");
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT id, full_name, business_name, phone, wilaya, commune, wallet_balance, credit_limit, outstanding_debt
+            FROM users
+            WHERE id = ? AND role = 'dealer' AND status = 'active'
+            ORDER BY full_name ASC
+        ");
+        $stmt->execute([$agent['collection_owner_id']]);
+    }
+    jsonResponse(['success' => true, 'dealers' => $stmt->fetchAll()]);
+}
+
+if ($route === '/api/collection/transactions' && $method === 'GET') {
+    $agent = requireAuthenticatedRole($pdo, $config, 'collection_agent');
+    $stmt = $pdo->prepare("
+        SELECT ct.id, ct.transaction_ref, ct.amount, ct.outstanding_before, ct.outstanding_after,
+               ct.status, ct.created_at, ct.confirmed_at, u.full_name AS dealer_name, u.business_name
+        FROM collection_transactions ct
+        JOIN users u ON u.id = ct.dealer_user_id
+        WHERE ct.agent_user_id = ? AND ct.status = 'confirmed'
+        ORDER BY ct.id DESC
+        LIMIT 100
+    ");
+    $stmt->execute([$agent['id']]);
+    jsonResponse(['success' => true, 'transactions' => $stmt->fetchAll()]);
+}
+
+if ($route === '/api/collection/collections' && $method === 'POST') {
+    $agent = requireAuthenticatedRole($pdo, $config, 'collection_agent');
+    $input = getRequestJson();
+    $dealerId = intval($input['dealer_id'] ?? 0);
+    $amount = is_numeric($input['amount'] ?? null) ? round(floatval($input['amount']), 2) : 0;
+
+    if ($dealerId <= 0 || !is_finite($amount) || $amount <= 0) {
+        jsonResponse(['success' => false, 'error' => 'Select a dealer and enter a valid payment amount.'], 400);
+    }
+    if ($agent['collection_owner_id'] !== null && intval($agent['collection_owner_id']) !== $dealerId) {
+        jsonResponse(['success' => false, 'error' => 'This collection agent can only collect payments for its assigned dealer.'], 403);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $lockClause = Database::getDriver() === 'mysql' ? ' FOR UPDATE' : '';
+        $dealerStmt = $pdo->prepare("
+            SELECT id, full_name, business_name, wallet_balance, outstanding_debt
+            FROM users
+            WHERE id = ? AND role = 'dealer' AND status = 'active'{$lockClause}
+        ");
+        $dealerStmt->execute([$dealerId]);
+        $dealer = $dealerStmt->fetch();
+
+        if (!$dealer) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Active dealer or shop not found.'], 404);
+        }
+
+        $debt = round(floatval($dealer['outstanding_debt']), 2);
+        if ($debt <= 0 || $amount > $debt) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => $debt <= 0 ? 'This dealer has no outstanding debt.' : 'Payment cannot exceed the outstanding debt.'], 400);
+        }
+
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $reference = 'COL-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(3)));
+        $expiresAt = date('Y-m-d H:i:s', time() + 600);
+        $stmt = $pdo->prepare("
+            INSERT INTO collection_transactions
+                (transaction_ref, dealer_user_id, agent_user_id, amount, outstanding_before, outstanding_after, confirmation_code_hash, expires_at, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        ");
+        $stmt->execute([
+            $reference, $dealerId, $agent['id'], $amount, $debt, round($debt - $amount, 2),
+            password_hash($code, PASSWORD_BCRYPT), $expiresAt
+        ]);
+        $collectionId = intval($pdo->lastInsertId());
+        $pdo->commit();
+
+        jsonResponse([
+            'success' => true,
+            'message' => 'Show the confirmation code to the shopkeeper. Collect the code from them to confirm payment.',
+            'collection' => [
+                'id' => $collectionId,
+                'transaction_ref' => $reference,
+                'amount' => $amount,
+                'confirmation_code' => $code,
+                'expires_at' => $expiresAt,
+                'dealer_name' => $dealer['full_name'],
+                'business_name' => $dealer['business_name']
+            ]
+        ], 201);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+if ($route === '/api/collection/collections/confirm' && $method === 'POST') {
+    $agent = requireAuthenticatedRole($pdo, $config, 'collection_agent');
+    $input = getRequestJson();
+    $collectionId = intval($input['collection_id'] ?? 0);
+    $code = trim($input['confirmation_code'] ?? '');
+    if ($collectionId <= 0 || !preg_match('/^\d{6}$/', $code)) {
+        jsonResponse(['success' => false, 'error' => 'Enter the six-digit code provided by the shopkeeper.'], 400);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $lockClause = Database::getDriver() === 'mysql' ? ' FOR UPDATE' : '';
+        $collectionStmt = $pdo->prepare("
+            SELECT * FROM collection_transactions
+            WHERE id = ? AND agent_user_id = ?{$lockClause}
+        ");
+        $collectionStmt->execute([$collectionId, $agent['id']]);
+        $collection = $collectionStmt->fetch();
+        if (!$collection || $collection['status'] !== 'pending') {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Pending collection not found or already processed.'], 404);
+        }
+
+        if (strtotime($collection['expires_at']) < time()) {
+            $pdo->prepare("UPDATE collection_transactions SET status = 'expired' WHERE id = ?")->execute([$collectionId]);
+            $pdo->commit();
+            jsonResponse(['success' => false, 'error' => 'Confirmation code expired. Start a new collection.'], 400);
+        }
+
+        if (!password_verify($code, $collection['confirmation_code_hash'])) {
+            $attempts = intval($collection['attempt_count']) + 1;
+            $status = $attempts >= 5 ? 'failed' : 'pending';
+            $pdo->prepare("UPDATE collection_transactions SET attempt_count = ?, status = ? WHERE id = ?")
+                ->execute([$attempts, $status, $collectionId]);
+            $pdo->commit();
+            jsonResponse(['success' => false, 'error' => $status === 'failed' ? 'Too many incorrect codes. Start a new collection.' : 'Incorrect confirmation code.'], 400);
+        }
+
+        $dealerStmt = $pdo->prepare("SELECT wallet_balance, outstanding_debt FROM users WHERE id = ? AND role = 'dealer'{$lockClause}");
+        $dealerStmt->execute([$collection['dealer_user_id']]);
+        $dealer = $dealerStmt->fetch();
+        $currentDebt = round(floatval($dealer['outstanding_debt'] ?? 0), 2);
+        $amount = round(floatval($collection['amount']), 2);
+        if (!$dealer || $currentDebt < $amount) {
+            $pdo->prepare("UPDATE collection_transactions SET status = 'failed' WHERE id = ?")->execute([$collectionId]);
+            $pdo->commit();
+            jsonResponse(['success' => false, 'error' => 'Dealer debt changed before confirmation. Refresh and start a new collection.'], 409);
+        }
+
+        $newDebt = round($currentDebt - $amount, 2);
+        $walletBalance = floatval($dealer['wallet_balance']);
+        $now = date('Y-m-d H:i:s');
+        $pdo->prepare("UPDATE users SET outstanding_debt = ?, updated_at = ? WHERE id = ?")
+            ->execute([$newDebt, $now, $collection['dealer_user_id']]);
+        $notes = "Cash debt payment {$collection['transaction_ref']}; outstanding debt {$currentDebt} -> {$newDebt}; collected by {$agent['full_name']}.";
+        $pdo->prepare("
+            INSERT INTO wallet_transactions
+                (transaction_ref, user_id, type, amount, balance_before, balance_after, related_id, notes, created_by)
+            VALUES (?, ?, 'debt_payment', ?, ?, ?, ?, ?, ?)
+        ")->execute([
+            $collection['transaction_ref'], $collection['dealer_user_id'], $amount, $walletBalance, $walletBalance,
+            $collectionId, $notes, $agent['id']
+        ]);
+        $pdo->prepare("UPDATE collection_transactions SET status = 'confirmed', outstanding_before = ?, outstanding_after = ?, confirmed_at = ? WHERE id = ?")
+            ->execute([$currentDebt, $newDebt, $now, $collectionId]);
+
+        $pdo->commit();
+        jsonResponse([
+            'success' => true,
+            'message' => 'Cash payment confirmed and recorded in the dealer ledger.',
+            'transaction_ref' => $collection['transaction_ref'],
+            'amount' => $amount,
+            'outstanding_debt' => $newDebt
+        ]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
 }
 
 // 2. OPERATORS & COMMISSIONS
@@ -299,7 +595,7 @@ if ($route === '/api/dealers/ledger' && $method === 'GET') {
     }
 
     $dealerStmt = $pdo->prepare("
-        SELECT id, full_name, business_name, phone, wallet_balance, credit_limit
+        SELECT id, full_name, business_name, phone, wallet_balance, credit_limit, outstanding_debt
         FROM users
         WHERE id = ? AND role = 'dealer'
     ");
@@ -325,7 +621,94 @@ if ($route === '/api/dealers/ledger' && $method === 'GET') {
     ]);
 }
 
+if ($route === '/api/dealers/reset-password' && $method === 'POST') {
+    requireAuthenticatedRole($pdo, $config, 'admin');
+    $input = getRequestJson();
+    $dealerId = intval($input['dealer_id'] ?? 0);
+    $newPassword = is_string($input['new_password'] ?? null) ? $input['new_password'] : '';
+
+    if ($dealerId <= 0 || strlen($newPassword) < 8) {
+        jsonResponse(['success' => false, 'error' => 'Select a dealer and enter a password of at least 8 characters.'], 400);
+    }
+
+    $stmt = $pdo->prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND role = 'dealer'");
+    $stmt->execute([password_hash($newPassword, PASSWORD_BCRYPT), date('Y-m-d H:i:s'), $dealerId]);
+    if ($stmt->rowCount() === 0) {
+        $check = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role = 'dealer'");
+        $check->execute([$dealerId]);
+        if (!$check->fetch()) {
+            jsonResponse(['success' => false, 'error' => 'Dealer account not found.'], 404);
+        }
+    }
+
+    jsonResponse(['success' => true, 'message' => 'Dealer password reset successfully.']);
+}
+
+if ($route === '/api/dealers/create' && $method === 'POST') {
+    requireAuthenticatedRole($pdo, $config, 'admin');
+    $input = getRequestJson();
+    $username = is_string($input['username'] ?? null) ? trim($input['username']) : '';
+    $fullName = is_string($input['full_name'] ?? null) ? trim($input['full_name']) : '';
+    $businessName = is_string($input['business_name'] ?? null) ? trim($input['business_name']) : '';
+    $phone = is_string($input['phone'] ?? null) ? trim($input['phone']) : '';
+    $password = is_string($input['password'] ?? null) ? $input['password'] : '';
+    $wilaya = is_string($input['wilaya'] ?? null) ? trim($input['wilaya']) : '';
+    $commune = is_string($input['commune'] ?? null) ? trim($input['commune']) : '';
+
+    if ($username === '' || $fullName === '' || $businessName === '' || $phone === '' || strlen($password) < 8) {
+        jsonResponse(['success' => false, 'error' => 'Name, business name, username, phone, and a password of at least 8 characters are required.'], 400);
+    }
+
+    $check = $pdo->prepare("SELECT id FROM users WHERE username = ? OR phone = ?");
+    $check->execute([$username, $phone]);
+    if ($check->fetch()) {
+        jsonResponse(['success' => false, 'error' => 'Username or phone number is already in use.'], 409);
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO users (username, phone, password_hash, role, full_name, business_name, wilaya, commune, status, wallet_balance)
+            VALUES (?, ?, ?, 'dealer', ?, ?, ?, ?, 'active', 0.00)
+        ");
+        $stmt->execute([$username, $phone, password_hash($password, PASSWORD_BCRYPT), $fullName, $businessName, $wilaya ?: 'Algiers', $commune ?: null]);
+    } catch (PDOException $e) {
+        if (Database::getDriver() === 'mysql' && str_contains($e->getMessage(), 'Duplicate')) {
+            jsonResponse(['success' => false, 'error' => 'Username or phone number is already in use.'], 409);
+        }
+        throw $e;
+    }
+
+    jsonResponse(['success' => true, 'message' => 'Dealer account created and activated.'], 201);
+}
+
+if ($route === '/api/dealers/status' && $method === 'POST') {
+    requireAuthenticatedRole($pdo, $config, 'admin');
+    $input = getRequestJson();
+    $dealerId = intval($input['dealer_id'] ?? 0);
+    $status = is_string($input['status'] ?? null) ? $input['status'] : '';
+    if ($dealerId <= 0 || !in_array($status, ['active', 'suspended'], true)) {
+        jsonResponse(['success' => false, 'error' => 'Select a dealer and a valid active or suspended status.'], 400);
+    }
+
+    $stmt = $pdo->prepare("UPDATE users SET status = ?, updated_at = ? WHERE id = ? AND role = 'dealer'");
+    $stmt->execute([$status, date('Y-m-d H:i:s'), $dealerId]);
+    if ($stmt->rowCount() === 0) {
+        $check = $pdo->prepare("SELECT id, status FROM users WHERE id = ? AND role = 'dealer'");
+        $check->execute([$dealerId]);
+        $dealer = $check->fetch();
+        if (!$dealer) {
+            jsonResponse(['success' => false, 'error' => 'Dealer account not found.'], 404);
+        }
+        if ($dealer['status'] !== $status) {
+            jsonResponse(['success' => false, 'error' => 'Dealer status was not updated.'], 500);
+        }
+    }
+
+    jsonResponse(['success' => true, 'message' => $status === 'active' ? 'Dealer account activated.' : 'Dealer account deactivated.']);
+}
+
 if ($route === '/api/dealers/approve' && $method === 'POST') {
+    requireAuthenticatedRole($pdo, $config, 'admin');
     $input = getRequestJson();
     $userId = intval($input['user_id'] ?? 0);
     $decision = $input['decision'] ?? 'active'; // 'active', 'rejected', 'suspended'
@@ -746,51 +1129,226 @@ if ($route === '/api/complaints' && $method === 'POST') {
 }
 
 if ($route === '/api/complaints/resolve' && $method === 'POST') {
+    $admin = requireAuthenticatedRole($pdo, $config, 'admin');
     $input = getRequestJson();
     $complaintId = intval($input['complaint_id'] ?? 0);
-    $status = $input['status'] ?? 'resolved_confirmed'; // 'resolved_refunded', 'resolved_confirmed', 'rejected'
+    $status = $input['status'] ?? 'resolved_confirmed';
     $adminResponse = trim($input['admin_response'] ?? 'Processed by support');
     $doRefund = !empty($input['refund_to_wallet']);
 
     if ($complaintId <= 0) {
         jsonResponse(['success' => false, 'error' => 'Invalid complaint ID'], 400);
     }
-
-    $cStmt = $pdo->prepare("SELECT c.*, r.net_debited FROM complaints c LEFT JOIN recharges r ON c.recharge_id = r.id WHERE c.id = ?");
-    $cStmt->execute([$complaintId]);
-    $ticket = $cStmt->fetch();
-
-    if (!$ticket) {
-        jsonResponse(['success' => false, 'error' => 'Ticket not found'], 404);
+    if (!in_array($status, ['resolved_confirmed', 'resolved_refunded', 'rejected'], true)
+        || ($doRefund && $status !== 'resolved_refunded')
+        || (!$doRefund && $status === 'resolved_refunded')) {
+        jsonResponse(['success' => false, 'error' => 'Invalid dispute resolution decision.'], 400);
     }
 
     $pdo->beginTransaction();
     try {
-        $nowStr = date('Y-m-d H:i:s');
-        $pdo->prepare("UPDATE complaints SET status = ?, admin_response = ?, resolved_by = 1, resolved_at = ? WHERE id = ?")
-            ->execute([$status, $adminResponse, $nowStr, $complaintId]);
+        $lockClause = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+        $cStmt = $pdo->prepare("
+            SELECT c.*, r.net_debited, r.status AS recharge_status
+            FROM complaints c
+            LEFT JOIN recharges r ON c.recharge_id = r.id
+            WHERE c.id = ?{$lockClause}
+        ");
+        $cStmt->execute([$complaintId]);
+        $ticket = $cStmt->fetch();
 
-        // If refund is requested and ticket has a recharge associated
-        if ($doRefund && !empty($ticket['recharge_id']) && $ticket['net_debited'] > 0) {
-            $uStmt = $pdo->prepare("SELECT wallet_balance FROM users WHERE id = ?");
+        if (!$ticket) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Ticket not found.'], 404);
+        }
+        if (!in_array($ticket['status'], ['open', 'investigating'], true)) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'This dispute has already been resolved.'], 409);
+        }
+        if ($doRefund && (
+            empty($ticket['recharge_id'])
+            || floatval($ticket['net_debited'] ?? 0) <= 0
+            || ($ticket['recharge_status'] ?? '') === 'reversed'
+        )) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'This transaction cannot be refunded or has already been reversed.'], 409);
+        }
+
+        $nowStr = date('Y-m-d H:i:s');
+        $resolveStmt = $pdo->prepare("
+            UPDATE complaints
+            SET status = ?, admin_response = ?, resolved_by = ?, resolved_at = ?
+            WHERE id = ? AND status IN ('open', 'investigating')
+        ");
+        $resolveStmt->execute([$status, $adminResponse, $admin['id'], $nowStr, $complaintId]);
+        if ($resolveStmt->rowCount() !== 1) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'This dispute has already been resolved.'], 409);
+        }
+
+        if ($doRefund) {
+            $rechargeStmt = $pdo->prepare("UPDATE recharges SET status = 'reversed' WHERE id = ? AND status <> 'reversed'");
+            $rechargeStmt->execute([$ticket['recharge_id']]);
+            if ($rechargeStmt->rowCount() !== 1) {
+                $pdo->rollBack();
+                jsonResponse(['success' => false, 'error' => 'This recharge has already been reversed.'], 409);
+            }
+
+            $uStmt = $pdo->prepare("SELECT wallet_balance FROM users WHERE id = ?{$lockClause}");
             $uStmt->execute([$ticket['user_id']]);
-            $current = floatval($uStmt->fetchColumn());
+            $balance = $uStmt->fetchColumn();
+            if ($balance === false) {
+                throw new RuntimeException('Dealer account for this dispute was not found.');
+            }
+            $current = floatval($balance);
             $refundAmount = floatval($ticket['net_debited']);
             $newBalance = $current + $refundAmount;
 
             $pdo->prepare("UPDATE users SET wallet_balance = ? WHERE id = ?")->execute([$newBalance, $ticket['user_id']]);
-            $pdo->prepare("UPDATE recharges SET status = 'reversed' WHERE id = ?")->execute([$ticket['recharge_id']]);
 
-            $txRef = 'WTX-REFUND-' . time() . '-' . rand(100, 999);
-            $pdo->prepare("INSERT INTO wallet_transactions (transaction_ref, user_id, type, amount, balance_before, balance_after, related_id, notes, created_by) VALUES (?, ?, 'refund', ?, ?, ?, ?, ?, 1)")
-                ->execute([$txRef, $ticket['user_id'], $refundAmount, $current, $newBalance, $ticket['recharge_id'], "Refund for complaint {$ticket['ticket_ref']}"]);
+            $txRef = 'WTX-REFUND-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(4)));
+            $pdo->prepare("INSERT INTO wallet_transactions (transaction_ref, user_id, type, amount, balance_before, balance_after, related_id, notes, created_by) VALUES (?, ?, 'refund', ?, ?, ?, ?, ?, ?)")
+                ->execute([$txRef, $ticket['user_id'], $refundAmount, $current, $newBalance, $ticket['recharge_id'], "Undo/refund for complaint {$ticket['ticket_ref']}", $admin['id']]);
         }
 
         $pdo->commit();
-        jsonResponse(['success' => true, 'message' => 'Ticket status updated successfully.']);
+        jsonResponse([
+            'success' => true,
+            'message' => $doRefund
+                ? 'Transaction marked reversed and the dealer wallet refunded.'
+                : 'Ticket status updated successfully.'
+        ]);
     } catch (Throwable $e) {
         $pdo->rollBack();
         jsonResponse(['success' => false, 'error' => 'Resolution failed: ' . $e->getMessage()], 500);
+    }
+}
+
+if ($route === '/api/complaints/undo-refund' && $method === 'POST') {
+    $admin = requireAuthenticatedRole($pdo, $config, 'admin');
+    $input = getRequestJson();
+    $complaintId = intval($input['complaint_id'] ?? 0);
+
+    if ($complaintId <= 0) {
+        jsonResponse(['success' => false, 'error' => 'Invalid complaint ID.'], 400);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $lockClause = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+        $ticketStmt = $pdo->prepare("
+            SELECT c.*, r.status AS recharge_status, r.net_debited
+            FROM complaints c
+            JOIN recharges r ON c.recharge_id = r.id
+            WHERE c.id = ?{$lockClause}
+        ");
+        $ticketStmt->execute([$complaintId]);
+        $ticket = $ticketStmt->fetch();
+
+        if (!$ticket) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Refunded dispute not found.'], 404);
+        }
+        if ($ticket['status'] !== 'resolved_refunded' || $ticket['recharge_status'] !== 'reversed') {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Only a refunded and reversed dispute can have its refund undone.'], 409);
+        }
+
+        $refundStmt = $pdo->prepare("
+            SELECT transaction_ref, amount, notes
+            FROM wallet_transactions
+            WHERE user_id = ? AND related_id = ? AND type = 'refund'
+            ORDER BY id DESC
+        ");
+        $refundStmt->execute([$ticket['user_id'], $ticket['recharge_id']]);
+        $refundTransaction = null;
+        $refundNote = "complaint {$ticket['ticket_ref']}";
+        foreach ($refundStmt->fetchAll() as $candidate) {
+            if (strpos((string) $candidate['notes'], $refundNote) !== false) {
+                $refundTransaction = $candidate;
+                break;
+            }
+        }
+        if (!$refundTransaction || floatval($refundTransaction['amount']) <= 0) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'The original wallet refund could not be verified.'], 409);
+        }
+
+        $undoNote = "Undo refund for complaint {$ticket['ticket_ref']}";
+        $adjustmentStmt = $pdo->prepare("
+            SELECT notes FROM wallet_transactions
+            WHERE user_id = ? AND related_id = ? AND type = 'adjustment'
+        ");
+        $adjustmentStmt->execute([$ticket['user_id'], $ticket['recharge_id']]);
+        foreach ($adjustmentStmt->fetchAll(PDO::FETCH_COLUMN) as $existingNote) {
+            if (strpos((string) $existingNote, $undoNote) !== false) {
+                $pdo->rollBack();
+                jsonResponse(['success' => false, 'error' => 'This refund has already been undone.'], 409);
+            }
+        }
+
+        $amount = floatval($refundTransaction['amount']);
+        $balanceStmt = $pdo->prepare("SELECT wallet_balance FROM users WHERE id = ?{$lockClause}");
+        $balanceStmt->execute([$ticket['user_id']]);
+        $balance = $balanceStmt->fetchColumn();
+        if ($balance === false) {
+            throw new RuntimeException('Dealer account for this dispute was not found.');
+        }
+        $balanceBefore = floatval($balance);
+        if ($balanceBefore < $amount) {
+            $pdo->rollBack();
+            jsonResponse([
+                'success' => false,
+                'error' => 'The dealer wallet balance is insufficient to undo this refund.',
+                'required_amount' => $amount,
+                'wallet_balance' => $balanceBefore
+            ], 409);
+        }
+
+        $balanceAfter = $balanceBefore - $amount;
+        $balanceUpdate = $pdo->prepare("UPDATE users SET wallet_balance = ? WHERE id = ? AND wallet_balance >= ?");
+        $balanceUpdate->execute([$balanceAfter, $ticket['user_id'], $amount]);
+        if ($balanceUpdate->rowCount() !== 1) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'Wallet balance changed; refresh and try again.'], 409);
+        }
+
+        $resolutionNote = 'Refund reversed by admin. Recharge remains reversed; dispute reopened for review.';
+        $reopenStmt = $pdo->prepare("
+            UPDATE complaints
+            SET status = 'investigating', admin_response = ?, resolved_by = NULL, resolved_at = NULL
+            WHERE id = ? AND status = 'resolved_refunded'
+        ");
+        $reopenStmt->execute([$resolutionNote, $complaintId]);
+        if ($reopenStmt->rowCount() !== 1) {
+            $pdo->rollBack();
+            jsonResponse(['success' => false, 'error' => 'This dispute has already been changed. Refresh and try again.'], 409);
+        }
+
+        $transactionRef = 'WTX-UNDO-REFUND-' . date('YmdHis') . '-' . strtoupper(bin2hex(random_bytes(4)));
+        $pdo->prepare("
+            INSERT INTO wallet_transactions
+                (transaction_ref, user_id, type, amount, balance_before, balance_after, related_id, notes, created_by)
+            VALUES (?, ?, 'adjustment', ?, ?, ?, ?, ?, ?)
+        ")->execute([
+            $transactionRef,
+            $ticket['user_id'],
+            $amount,
+            $balanceBefore,
+            $balanceAfter,
+            $ticket['recharge_id'],
+            "{$undoNote}; original refund {$refundTransaction['transaction_ref']}",
+            $admin['id']
+        ]);
+
+        $pdo->commit();
+        jsonResponse([
+            'success' => true,
+            'message' => 'Refund undone, dealer wallet debited, and dispute reopened. Recharge remains reversed.'
+        ]);
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        jsonResponse(['success' => false, 'error' => 'Could not undo refund: ' . $e->getMessage()], 500);
     }
 }
 

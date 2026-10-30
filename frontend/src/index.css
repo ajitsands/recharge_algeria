@@ -130,7 +130,7 @@ html, body, #root {
   align-items: center;
   gap: 6px;
   flex-wrap: nowrap;
-  overflow-x: auto;
+  overflow: visible;
   scrollbar-width: none;
 }
 
@@ -159,6 +159,16 @@ html, body, #root {
   background-color: var(--sidebar-active);
   color: #ffffff;
   box-shadow: 0 4px 14px rgba(0, 135, 68, 0.4);
+}
+
+@media (max-width: 1024px) {
+  .horizontal-nav-bar {
+    flex-wrap: wrap;
+  }
+
+  .horizontal-nav-menu {
+    flex-wrap: wrap;
+  }
 }
 
 .horizontal-nav-ticker {

@@ -71,6 +71,7 @@ class Database {
                     }
 
                     self::ensureOperatorTransactionsTable($pdo, 'mysql');
+                    self::ensureCollectionTables($pdo, 'mysql');
                     self::$instance = $pdo;
                     self::$driver = 'mysql';
                     return self::$instance;
@@ -99,6 +100,7 @@ class Database {
                                 self::initializeMySqlDatabase($pdo);
                             }
                             self::ensureOperatorTransactionsTable($pdo, 'mysql');
+                            self::ensureCollectionTables($pdo, 'mysql');
                             self::$instance = $pdo;
                             self::$driver = 'mysql';
                             return self::$instance;
@@ -135,11 +137,91 @@ class Database {
         }
 
         self::ensureOperatorTransactionsTable($pdo, 'sqlite');
+        self::ensureCollectionTables($pdo, 'sqlite');
         return self::$instance;
     }
 
     public static function getDriver(): string {
         return self::$driver;
+    }
+
+    private static function ensureCollectionTables(PDO $pdo, string $driver): void {
+        if ($driver === 'mysql') {
+            $roleColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch();
+            if ($roleColumn && strpos($roleColumn['Type'], 'collection_agent') === false) {
+                $pdo->exec("ALTER TABLE users MODIFY role ENUM('admin', 'dealer', 'finance', 'support', 'collection_agent') DEFAULT 'dealer'");
+            }
+
+            $ownerColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'collection_owner_id'")->fetch();
+            if (!$ownerColumn) {
+                $pdo->exec("ALTER TABLE users ADD COLUMN collection_owner_id INT NULL");
+            }
+            $ownerIndex = $pdo->query("SHOW INDEX FROM users WHERE Key_name = 'users_collection_owner'")->fetch();
+            if (!$ownerIndex) {
+                $pdo->exec("CREATE INDEX users_collection_owner ON users (collection_owner_id, role)");
+            }
+
+            $walletType = $pdo->query("SHOW COLUMNS FROM wallet_transactions LIKE 'type'")->fetch();
+            if ($walletType && strpos($walletType['Type'], 'debt_payment') === false) {
+                $pdo->exec("ALTER TABLE wallet_transactions MODIFY type ENUM('credit_topup', 'recharge_debit', 'commission_credit', 'refund', 'refund_credit', 'adjustment', 'debt_payment') NOT NULL");
+            }
+
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS collection_transactions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    transaction_ref VARCHAR(50) UNIQUE NOT NULL,
+                    dealer_user_id INT NOT NULL,
+                    agent_user_id INT NOT NULL,
+                    amount DECIMAL(12, 2) NOT NULL,
+                    outstanding_before DECIMAL(12, 2) NOT NULL,
+                    outstanding_after DECIMAL(12, 2) NOT NULL,
+                    confirmation_code_hash VARCHAR(255) NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    attempt_count INT NOT NULL DEFAULT 0,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    confirmed_at DATETIME NULL,
+                    INDEX collection_agent_created (agent_user_id, created_at),
+                    INDEX collection_dealer_created (dealer_user_id, created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            return;
+        }
+
+        $userColumns = $pdo->query("PRAGMA table_info(users)")->fetchAll();
+        $hasOwnerColumn = false;
+        foreach ($userColumns as $column) {
+            if ($column['name'] === 'collection_owner_id') {
+                $hasOwnerColumn = true;
+                break;
+            }
+        }
+        if (!$hasOwnerColumn) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN collection_owner_id INTEGER NULL");
+        }
+        $pdo->exec("CREATE INDEX IF NOT EXISTS users_collection_owner ON users (collection_owner_id, role)");
+
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS collection_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_ref TEXT UNIQUE NOT NULL,
+                dealer_user_id INTEGER NOT NULL,
+                agent_user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                outstanding_before REAL NOT NULL,
+                outstanding_after REAL NOT NULL,
+                confirmation_code_hash TEXT NOT NULL,
+                expires_at DATETIME NOT NULL,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                confirmed_at DATETIME
+            );
+            CREATE INDEX IF NOT EXISTS collection_agent_created
+                ON collection_transactions (agent_user_id, created_at);
+            CREATE INDEX IF NOT EXISTS collection_dealer_created
+                ON collection_transactions (dealer_user_id, created_at);
+        ");
     }
 
     private static function ensureOperatorTransactionsTable(PDO $pdo, string $driver): void {
@@ -213,6 +295,7 @@ class Database {
                 email TEXT,
                 password_hash TEXT NOT NULL,
                 role TEXT DEFAULT 'dealer',
+                collection_owner_id INTEGER,
                 full_name TEXT NOT NULL,
                 business_name TEXT,
                 wilaya TEXT DEFAULT 'Algiers',

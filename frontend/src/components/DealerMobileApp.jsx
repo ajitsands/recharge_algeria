@@ -7,7 +7,30 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 
+const DEALER_SESSION_KEY = 'razik_dealer_auth_session';
+
+function readDealerSession() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(DEALER_SESSION_KEY);
+    if (!saved) return null;
+    const session = JSON.parse(saved);
+    const [payload] = String(session.token || '').split('.');
+    const claims = payload ? JSON.parse(atob(payload)) : null;
+    if (session.user?.role !== 'dealer' || !claims?.exp || claims.exp <= Date.now() / 1000) {
+      localStorage.removeItem(DEALER_SESSION_KEY);
+      return null;
+    }
+    return session;
+  } catch (error) {
+    console.warn('Could not restore the dealer sign-in session:', error);
+    localStorage.removeItem(DEALER_SESSION_KEY);
+    return null;
+  }
+}
+
 export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onOpenQrModal, isDirectMobile }) {
+  const [authSession, setAuthSession] = useState(readDealerSession);
   const [currentScreen, setCurrentScreenState] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('razik_dealer_screen');
@@ -25,16 +48,14 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
     }
   };
 
-  const [dealer, setDealer] = useState({
-    id: 2,
-    username: 'dealer_algiers',
-    full_name: 'Karim Benali',
-    business_name: 'Kiosque Bab El Oued',
-    phone: '0661234567',
-    wilaya: 'Alger',
-    wallet_balance: 44905.00,
-    credit_limit: 20000.00
-  });
+  const [dealer, setDealer] = useState(() => authSession?.user || null);
+  const [loginCredentials, setLoginCredentials] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordFields, setPasswordFields] = useState({ current_password: '', new_password: '', confirm_password: '' });
+  const [passwordError, setPasswordError] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
 
   const [operators, setOperators] = useState([
     { id: 1, code: 'mobilis', name: 'Mobilis', name_ar: 'موبيليس', prefixes: '065,066,067,069', default_commission_pct: 5.0, color_hex: '#008a3e' },
@@ -87,18 +108,84 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
     setTimeout(() => setNotification(null), 3500);
   };
 
+  const handleDealerLogin = async (event) => {
+    event.preventDefault();
+    setLoginError('');
+    setAuthBusy(true);
+    try {
+      const result = await api.login(loginCredentials);
+      if (!result.success) throw new Error(result.error || 'Sign in failed.');
+      if (result.user?.role !== 'dealer') {
+        throw new Error(lang === 'ar' ? 'هذا الدخول مخصص لحسابات المحلات فقط.' : 'This sign-in is for dealer/shopkeeper accounts only.');
+      }
+      const session = { token: result.token, user: result.user };
+      localStorage.setItem(DEALER_SESSION_KEY, JSON.stringify(session));
+      setAuthSession(session);
+      setDealer(result.user);
+      setLoginCredentials({ username: '', password: '' });
+      setCurrentScreen('home');
+    } catch (error) {
+      setLoginError(error.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleDealerLogout = () => {
+    localStorage.removeItem(DEALER_SESSION_KEY);
+    setAuthSession(null);
+    setDealer(null);
+    setHistory([]);
+    setLastReceipt(null);
+    setPhoneInput('');
+    setAmountInput('100');
+    setAccountMenuOpen(false);
+    setPasswordModalOpen(false);
+    setCurrentScreen('home');
+  };
+
+  const handlePasswordChange = async (event) => {
+    event.preventDefault();
+    setPasswordError('');
+    if (passwordFields.new_password.length < 8) {
+      setPasswordError(lang === 'ar' ? 'يجب أن تتكون كلمة المرور الجديدة من 8 أحرف على الأقل.' : 'New password must be at least 8 characters.');
+      return;
+    }
+    if (passwordFields.new_password !== passwordFields.confirm_password) {
+      setPasswordError(lang === 'ar' ? 'كلمتا المرور الجديدتان غير متطابقتين.' : 'New passwords do not match.');
+      return;
+    }
+    setAuthBusy(true);
+    try {
+      const result = await api.changeDealerPassword({
+        current_password: passwordFields.current_password,
+        new_password: passwordFields.new_password
+      }, authSession.token);
+      if (!result.success) throw new Error(result.error || 'Could not change password.');
+      setPasswordModalOpen(false);
+      setPasswordFields({ current_password: '', new_password: '', confirm_password: '' });
+      notify(lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح.' : 'Password changed successfully.');
+    } catch (error) {
+      setPasswordError(error.message);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
   const refreshData = async () => {
+    const dealerId = Number(authSession?.user?.id);
+    if (!dealerId) return;
     setLoading(true);
     try {
       const [opRes, rcRes, dlRes] = await Promise.all([
         api.getOperators(),
-        api.getRecharges({ user_id: dealer.id }),
+        api.getRecharges({ user_id: dealerId }),
         api.getDealers()
       ]);
       if (opRes.success && opRes.operators) setOperators(opRes.operators);
       if (rcRes.success && rcRes.recharges) setHistory(rcRes.recharges);
       if (dlRes.success && dlRes.dealers) {
-        const me = dlRes.dealers.find(d => d.id === dealer.id);
+        const me = dlRes.dealers.find(d => Number(d.id) === dealerId);
         if (me) setDealer(me);
       }
     } catch (e) {
@@ -109,10 +196,11 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
   };
 
   useEffect(() => {
+    if (!authSession?.token) return undefined;
     refreshData();
     const timer = setInterval(refreshData, 20000); // 20s auto sync
     return () => clearInterval(timer);
-  }, []);
+  }, [authSession?.token]);
 
   // Real-time Operator Detection on Phone Input
   useEffect(() => {
@@ -232,6 +320,66 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
   };
 
   const currencyLabel = lang === 'ar' ? 'د.ج' : 'DZD';
+
+  if (!authSession || !dealer) {
+    return (
+      <div dir={lang === 'ar' ? 'rtl' : 'ltr'} style={{
+        minHeight: '100vh',
+        width: '100%',
+        maxWidth: '440px',
+        margin: '0 auto',
+        padding: '24px 18px',
+        boxSizing: 'border-box',
+        background: 'var(--bg-surface-alt)',
+        color: 'var(--text-primary)',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center'
+      }}>
+        <form onSubmit={handleDealerLogin} style={{
+          padding: '22px',
+          borderRadius: '20px',
+          background: 'var(--bg-surface)',
+          boxShadow: '0 12px 32px rgba(15,23,42,.1)'
+        }}>
+          <div style={{ marginBottom: '20px' }}>
+            <strong style={{ display: 'block', fontSize: '22px', color: 'var(--algeria-green)' }}>Razik Telecom</strong>
+            <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+              {lang === 'ar' ? 'تسجيل دخول المحل ونقطة البيع' : 'Shopkeeper POS Sign In'}
+            </span>
+          </div>
+          {loginError && <p role="alert" style={{ padding: '10px 12px', borderRadius: '10px', background: '#fee2e2', color: '#991b1b', fontSize: '13px', fontWeight: 700 }}>{loginError}</p>}
+          <label style={{ display: 'block', marginBottom: '14px', fontSize: '13px', fontWeight: 700 }}>
+            {lang === 'ar' ? 'اسم المستخدم أو الهاتف' : 'Username or phone'}
+            <input
+              required
+              autoComplete="username"
+              value={loginCredentials.username}
+              onChange={(event) => setLoginCredentials({ ...loginCredentials, username: event.target.value })}
+              style={{ width: '100%', boxSizing: 'border-box', marginTop: '6px', padding: '12px', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: '15px' }}
+            />
+          </label>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 700 }}>
+            {lang === 'ar' ? 'كلمة المرور' : 'Password'}
+            <input
+              required
+              type="password"
+              autoComplete="current-password"
+              value={loginCredentials.password}
+              onChange={(event) => setLoginCredentials({ ...loginCredentials, password: event.target.value })}
+              style={{ width: '100%', boxSizing: 'border-box', marginTop: '6px', padding: '12px', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: '15px' }}
+            />
+          </label>
+          <button type="submit" disabled={authBusy} style={{ width: '100%', marginTop: '18px', padding: '13px', border: 0, borderRadius: '11px', background: 'var(--algeria-green)', color: '#fff', fontSize: '15px', fontWeight: 800, cursor: authBusy ? 'wait' : 'pointer' }}>
+            {authBusy ? '…' : (lang === 'ar' ? 'تسجيل الدخول' : 'Sign In')}
+          </button>
+          <button type="button" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} style={{ width: '100%', marginTop: '10px', padding: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            {lang === 'ar' ? 'English' : 'العربية'}
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: '100%' }}>
@@ -359,14 +507,73 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                   >
                     {theme === 'dark' ? '☀️' : '🌙'}
                   </button>
-                  <button
-                    onClick={onOpenQrModal}
-                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}
-                    title="QR Code"
-                  >
-                    📱 QR
-                  </button>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      onClick={() => setAccountMenuOpen((open) => !open)}
+                      style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '5px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      {lang === 'ar' ? 'حسابي' : 'Account'}
+                    </button>
+                    {accountMenuOpen && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 50, width: '190px', padding: '6px', borderRadius: '12px', background: 'var(--bg-surface)', boxShadow: '0 8px 24px rgba(0,0,0,.2)', border: '1px solid var(--border-subtle)' }}>
+                        <button
+                          type="button"
+                          onClick={() => { setPasswordError(''); setPasswordFields({ current_password: '', new_password: '', confirm_password: '' }); setPasswordModalOpen(true); setAccountMenuOpen(false); }}
+                          style={{ display: 'block', width: '100%', padding: '10px', textAlign: 'start', border: 0, borderRadius: '8px', background: 'transparent', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {lang === 'ar' ? 'تغيير كلمة المرور' : 'Change password'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDealerLogout}
+                          style={{ display: 'block', width: '100%', padding: '10px', textAlign: 'start', border: 0, borderRadius: '8px', background: 'transparent', color: '#d21034', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {lang === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              </div>
+            )}
+
+            {passwordModalOpen && (
+              <div role="presentation" onClick={() => !authBusy && setPasswordModalOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 10000, padding: '18px', background: 'rgba(15,23,42,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <form
+                  onSubmit={handlePasswordChange}
+                  onClick={(event) => event.stopPropagation()}
+                  style={{ width: '100%', maxWidth: '400px', padding: '20px', borderRadius: '18px', background: 'var(--bg-surface)', color: 'var(--text-primary)', boxShadow: '0 20px 50px rgba(0,0,0,.3)' }}
+                >
+                  <h2 style={{ margin: '0 0 16px', fontSize: '19px' }}>{lang === 'ar' ? 'تغيير كلمة المرور' : 'Change password'}</h2>
+                  {[
+                    ['current_password', lang === 'ar' ? 'كلمة المرور الحالية' : 'Current password', 'current-password'],
+                    ['new_password', lang === 'ar' ? 'كلمة المرور الجديدة (8 أحرف على الأقل)' : 'New password (at least 8 characters)', 'new-password'],
+                    ['confirm_password', lang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new password', 'new-password']
+                  ].map(([field, label, autocomplete]) => (
+                    <label key={field} style={{ display: 'block', marginBottom: '12px', fontSize: '12px', fontWeight: 700 }}>
+                      {label}
+                      <input
+                        required
+                        minLength={field === 'current_password' ? undefined : 8}
+                        type="password"
+                        autoComplete={autocomplete}
+                        value={passwordFields[field]}
+                        onChange={(event) => setPasswordFields({ ...passwordFields, [field]: event.target.value })}
+                        style={{ width: '100%', boxSizing: 'border-box', display: 'block', marginTop: '5px', padding: '11px', border: '1px solid var(--border-subtle)', borderRadius: '9px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                      />
+                    </label>
+                  ))}
+                  {passwordError && <p role="alert" style={{ color: '#b91c1c', fontSize: '12px', fontWeight: 700 }}>{passwordError}</p>}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+                    <button type="button" disabled={authBusy} onClick={() => setPasswordModalOpen(false)} style={{ padding: '10px 12px', border: '1px solid var(--border-subtle)', borderRadius: '9px', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                      {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button type="submit" disabled={authBusy} style={{ padding: '10px 12px', border: 0, borderRadius: '9px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: authBusy ? 'wait' : 'pointer' }}>
+                      {authBusy ? '…' : (lang === 'ar' ? 'حفظ كلمة المرور' : 'Save password')}
+                    </button>
+                  </div>
+                </form>
               </div>
             )}
 
@@ -398,9 +605,29 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                     </div>
                   </div>
 
-                  <button onClick={refreshData} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px' }}>
-                    <RefreshCw style={{ width: '16px', height: '16px', color: 'var(--text-muted)', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {!isDirectMobile && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => { setPasswordError(''); setPasswordFields({ current_password: '', new_password: '', confirm_password: '' }); setPasswordModalOpen(true); }}
+                          style={{ padding: '7px 9px', border: '1px solid var(--border-subtle)', borderRadius: '9px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {lang === 'ar' ? 'تغيير كلمة المرور' : 'Change password'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDealerLogout}
+                          style={{ padding: '7px 9px', border: '1px solid rgba(210,16,52,.25)', borderRadius: '9px', background: 'var(--bg-surface)', color: '#d21034', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          {lang === 'ar' ? 'خروج' : 'Log out'}
+                        </button>
+                      </>
+                    )}
+                    <button onClick={refreshData} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px' }}>
+                      <RefreshCw style={{ width: '16px', height: '16px', color: 'var(--text-muted)', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Algerian Emerald Wallet Balance Card (Fixed Rich Background & High-Contrast Typography) */}

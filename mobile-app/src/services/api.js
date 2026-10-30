@@ -1,5 +1,5 @@
 // React Native API Client
-const BASE_URL = 'http://10.0.2.2:8000/api'; // Android Emulator default loopback or production VPS IP
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000/api';
 
 export const api = {
   login: async (credentials) => {
@@ -7,6 +7,38 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials)
+    });
+    return res.json();
+  },
+
+  collectionDealers: async (token) => {
+    const res = await fetch(`${BASE_URL}/collection/dealers`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return res.json();
+  },
+
+  createCollection: async (payload, token) => {
+    const res = await fetch(`${BASE_URL}/collection/collections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  },
+
+  confirmCollection: async (payload, token) => {
+    const res = await fetch(`${BASE_URL}/collection/collections/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  },
+
+  collectionHistory: async (token) => {
+    const res = await fetch(`${BASE_URL}/collection/transactions`, {
+      headers: { Authorization: `Bearer ${token}` }
     });
     return res.json();
   },

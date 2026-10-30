@@ -3,33 +3,24 @@ import { QRCodeSVG } from 'qrcode.react';
 import { X, Smartphone, Copy, Check, ExternalLink, Wifi, RefreshCw, ShieldCheck, Globe, Server, Sparkles } from 'lucide-react';
 
 export default function MobileAccessQRModal({ open, onClose, lang }) {
-  const [copied, setCopied] = useState(false);
-  const [customIp, setCustomIp] = useState('');
-
-  // Detect environment
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  const isPrivateIp = currentHost === 'localhost' || currentHost === '127.0.0.1' ||
-    /^192\.168\./.test(currentHost) || /^10\./.test(currentHost) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(currentHost);
+  const isLoopback = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '::1';
+  const isPrivateIp = isLoopback || /^192\.168\./.test(currentHost) ||
+    /^10\./.test(currentHost) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(currentHost);
+  const [copied, setCopied] = useState(false);
+  const [customIp, setCustomIp] = useState(() => (isLoopback ? '' : currentHost));
 
-  // Default mode: server mode defaults to http://recharge.teamtoob.in
-  const [tabMode, setTabMode] = useState('server');
+  const [tabMode, setTabMode] = useState(() => (isPrivateIp ? 'wifi' : 'server'));
+  const [mobileApp, setMobileApp] = useState('pos');
   const [serverUrlInput, setServerUrlInput] = useState(
-    !isPrivateIp && typeof window !== 'undefined' && window.location.host
+    typeof window !== 'undefined' && window.location.host
       ? `${window.location.protocol}//${window.location.host}`
-      : 'http://recharge.teamtoob.in'
+      : ''
   );
 
   if (!open) return null;
 
-  // Local Wi-Fi IPs
-  const availableIps = [
-    { label: 'Wi-Fi Network (Current)', ip: '192.168.100.4' },
-    { label: 'Local LAN Ethernet', ip: '192.168.1.10' },
-    { label: 'Current Browser Host', ip: currentHost }
-  ];
-
-  const defaultIp = (!isPrivateIp && currentHost !== 'localhost') ? currentHost : '192.168.100.4';
-  const activeIp = customIp || defaultIp;
+  const activeIp = customIp.trim();
   const port = typeof window !== 'undefined' && window.location.port ? window.location.port : '1001';
 
   // Construct URL based on active mode
@@ -39,18 +30,20 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
     if (!/^https?:\/\//i.test(clean)) {
       clean = 'http://' + clean;
     }
-    mobileUrl = `${clean}/?mode=mobile`;
+    mobileUrl = clean ? `${clean}/?mode=${mobileApp === 'agent' ? 'collection-agent' : 'mobile'}` : '';
   } else {
-    mobileUrl = `http://${activeIp}:${port}/?mode=mobile`;
+    mobileUrl = activeIp ? `http://${activeIp}:${port}/?mode=${mobileApp === 'agent' ? 'collection-agent' : 'mobile'}` : '';
   }
 
   const handleCopy = () => {
+    if (!mobileUrl) return;
     navigator.clipboard.writeText(mobileUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
   };
 
   const handleOpenDirect = () => {
+    if (!mobileUrl) return;
     window.open(mobileUrl, '_blank');
   };
 
@@ -89,7 +82,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
                 {lang === 'ar' ? 'مسح QR للفتح على الهاتف الذكي' : 'Scan QR for Mobile Smartphone Access'}
               </h3>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {lang === 'ar' ? 'تطبيق الموزع ونقطة البيع عبر الهاتف' : 'Dealer POS Mobile Application'}
+                {lang === 'ar' ? 'نقطة البيع أو تطبيق المحصل عبر الهاتف' : 'Dealer POS or Collection Agent on mobile'}
               </span>
             </div>
           </div>
@@ -107,6 +100,40 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
           >
             <X style={{ width: '20px', height: '20px' }} />
           </button>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          gap: '6px',
+          padding: '4px',
+          borderRadius: '12px',
+          backgroundColor: 'var(--bg-surface-alt)',
+          border: '1px solid var(--border-subtle)',
+          marginBottom: '16px'
+        }}>
+          {[
+            { id: 'pos', label: lang === 'ar' ? 'نقطة البيع' : 'Dealer POS' },
+            { id: 'agent', label: lang === 'ar' ? 'تطبيق المحصل' : 'Collection Agent' }
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setMobileApp(item.id)}
+              style={{
+                flex: 1,
+                padding: '9px 10px',
+                borderRadius: '9px',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 800,
+                fontSize: '12px',
+                backgroundColor: mobileApp === item.id ? 'var(--algeria-green)' : 'transparent',
+                color: mobileApp === item.id ? '#ffffff' : 'var(--text-secondary)'
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
         {/* Mode Selector Tabs: Server Domain vs Local Wi-Fi */}
@@ -212,14 +239,31 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
           boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.03)'
         }}>
           <div style={{ padding: '10px', backgroundColor: '#ffffff', borderRadius: '14px', boxShadow: '0 6px 16px rgba(0,0,0,0.08)' }}>
-            <QRCodeSVG
-              value={mobileUrl}
-              size={195}
-              bgColor="#ffffff"
-              fgColor="#005a2b"
-              level="H"
-              includeMargin={true}
-            />
+            {mobileUrl ? (
+              <QRCodeSVG
+                value={mobileUrl}
+                size={195}
+                bgColor="#ffffff"
+                fgColor="#005a2b"
+                level="H"
+                includeMargin={true}
+              />
+            ) : (
+              <div style={{
+                width: '195px',
+                height: '195px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '20px',
+                boxSizing: 'border-box',
+                color: 'var(--text-secondary)',
+                textAlign: 'center',
+                fontSize: '13px'
+              }}>
+                {lang === 'ar' ? 'أدخل عنوان IP المحلي لإنشاء الرمز' : 'Enter this computer’s local IP to create the QR code.'}
+              </div>
+            )}
           </div>
 
           <div style={{
@@ -303,29 +347,19 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
             <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
               {lang === 'ar' ? 'عنوان الشبكة المحلية (Local IP):' : 'Local Network Address:'}
             </label>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {availableIps.map(item => (
-                <button
-                  key={item.ip}
-                  type="button"
-                  onClick={() => setCustomIp(item.ip)}
-                  style={{
-                    flex: 1,
-                    padding: '6px 8px',
-                    borderRadius: '8px',
-                    border: '1px solid',
-                    borderColor: activeIp === item.ip ? 'var(--algeria-green)' : 'var(--border-subtle)',
-                    backgroundColor: activeIp === item.ip ? 'var(--algeria-green-light)' : 'var(--bg-surface-alt)',
-                    color: activeIp === item.ip ? 'var(--algeria-green)' : 'var(--text-secondary)',
-                    fontWeight: '700',
-                    fontSize: '11px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {item.ip}
-                </button>
-              ))}
-            </div>
+            <input
+              type="text"
+              value={customIp}
+              onChange={(event) => setCustomIp(event.target.value)}
+              placeholder={lang === 'ar' ? 'مثال: 192.168.8.11' : 'e.g. 192.168.8.11'}
+              className="filter-input"
+              style={{ width: '100%', fontSize: '13px', fontFamily: 'monospace', direction: 'ltr' }}
+            />
+            <span style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+              {lang === 'ar'
+                ? `استخدم عنوان IPv4 لهذا الكمبيوتر. يجب اتصال الهاتف بنفس شبكة Wi-Fi والمنفذ ${port} متاحاً.`
+                : `Enter this computer’s IPv4 address. Connect the phone to the same Wi-Fi; port ${port} must be allowed.`}
+            </span>
           </div>
         )}
 
@@ -357,6 +391,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
           />
           <button
             onClick={handleCopy}
+            disabled={!mobileUrl}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -381,6 +416,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             onClick={handleOpenDirect}
+            disabled={!mobileUrl}
             style={{
               flex: 1,
               padding: '12px',

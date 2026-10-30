@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Moon, Sun, Smartphone, Monitor, Database, Clock } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Globe, Moon, Sun, Smartphone, Monitor, Database, Clock, LogIn, LogOut, UserRound, X } from 'lucide-react';
+import { api } from '../api';
 
 export default function AlgerianArtHeader({ 
   currentMode, 
@@ -9,9 +11,42 @@ export default function AlgerianArtHeader({
   theme, 
   setTheme, 
   t,
-  onOpenQrModal
+  onOpenQrModal,
+  currentUser,
+  onLogin,
+  onLogout
 }) {
   const [time, setTime] = useState('');
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
+
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setLoginSubmitting(true);
+    setLoginError('');
+    try {
+      const response = await api.login(credentials);
+      if (!response.success) {
+        setLoginError(response.error || t.loginFailed);
+        return;
+      }
+      if (!response.token || !response.user) {
+        setLoginError(t.loginFailed);
+        return;
+      }
+
+      onLogin({ token: response.token, user: response.user });
+      setCredentials({ username: '', password: '' });
+      setLoginOpen(false);
+    } catch (error) {
+      console.error('Sign-in failed:', error);
+      setLoginError(error.message || t.loginFailed);
+    } finally {
+      setLoginSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     const update = () => {
@@ -179,6 +214,44 @@ export default function AlgerianArtHeader({
             </button>
           </div>
 
+          {currentUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                color: '#ffffff',
+                fontSize: '12px',
+                fontWeight: 700
+              }}>
+                <UserRound style={{ width: '15px', height: '15px' }} />
+                {currentUser.full_name || currentUser.username}
+              </span>
+              <button
+                id="btn-logout"
+                type="button"
+                onClick={onLogout}
+                style={authButtonStyle}
+              >
+                <LogOut style={{ width: '14px', height: '14px' }} />
+                <span>{t.logout}</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              id="btn-login"
+              type="button"
+              onClick={() => {
+                setLoginError('');
+                setLoginOpen(true);
+              }}
+              style={authButtonStyle}
+            >
+              <LogIn style={{ width: '14px', height: '14px' }} />
+              <span>{t.login}</span>
+            </button>
+          )}
+
           {/* Language Toggle */}
           <button
             id="btn-language-toggle"
@@ -223,6 +296,98 @@ export default function AlgerianArtHeader({
         </div>
 
       </div>
+
+      {loginOpen && createPortal(
+        <div
+          className="modal-overlay"
+          onClick={() => !loginSubmitting && setLoginOpen(false)}
+          style={{ zIndex: 100000 }}
+        >
+          <form
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={handleLogin}
+            style={{ width: 'min(420px, 94vw)', display: 'flex', flexDirection: 'column', gap: '14px' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '20px', fontWeight: 800 }}>{t.login}</h2>
+              <button
+                type="button"
+                aria-label={lang === 'ar' ? 'إغلاق' : 'Close'}
+                onClick={() => setLoginOpen(false)}
+                disabled={loginSubmitting}
+                style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
+                <X style={{ width: '20px', height: '20px' }} />
+              </button>
+            </div>
+
+            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 700 }}>
+              {t.username} / {t.phone}
+              <input
+                autoComplete="username"
+                required
+                value={credentials.username}
+                onChange={(event) => setCredentials((current) => ({ ...current, username: event.target.value }))}
+                className="filter-input"
+                style={{ display: 'block', width: '100%', marginTop: '6px' }}
+              />
+            </label>
+
+            <label style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 700 }}>
+              {t.password}
+              <input
+                autoComplete="current-password"
+                required
+                type="password"
+                value={credentials.password}
+                onChange={(event) => setCredentials((current) => ({ ...current, password: event.target.value }))}
+                className="filter-input"
+                style={{ display: 'block', width: '100%', marginTop: '6px' }}
+              />
+            </label>
+
+            {loginError && (
+              <p role="alert" style={{ margin: 0, color: 'var(--algeria-red)', fontSize: '13px', fontWeight: 700 }}>
+                {loginError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loginSubmitting}
+              style={{
+                padding: '12px',
+                border: 'none',
+                borderRadius: '10px',
+                background: 'var(--algeria-green)',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: 800,
+                cursor: loginSubmitting ? 'wait' : 'pointer'
+              }}
+            >
+              {loginSubmitting ? t.signingIn : t.login}
+            </button>
+          </form>
+        </div>,
+        document.body
+      )}
     </header>
   );
 }
+
+const authButtonStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  padding: '8px 12px',
+  borderRadius: '10px',
+  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  border: '1px solid rgba(255, 255, 255, 0.25)',
+  color: '#ffffff',
+  fontSize: '12px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap'
+};

@@ -3,11 +3,12 @@ import {
   StyleSheet, Text, View, TextInput, TouchableOpacity, 
   ScrollView, SafeAreaView, StatusBar, Alert 
 } from 'react-native';
-import { COLORS } from './src/constants/theme';
-import { OPERATORS, detectOperatorByPrefix } from './src/constants/operators';
+import { detectOperatorByPrefix } from './src/constants/operators';
 import { api } from './src/services/api';
+import CollectionAgentApp from './src/CollectionAgentApp';
 
 export default function App() {
+  const [collectionAgentMode, setCollectionAgentMode] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [amount, setAmount] = useState('100');
   const [walletBalance, setWalletBalance] = useState(44905.00);
@@ -24,6 +25,10 @@ export default function App() {
   const commPct = detectedOp ? detectedOp.defaultCommission : 5.0;
   const commAmount = (faceVal * commPct) / 100;
   const netDebited = faceVal - commAmount;
+
+  if (collectionAgentMode) {
+    return <CollectionAgentApp onBack={() => setCollectionAgentMode(false)} />;
+  }
 
   const handleRecharge = async () => {
     if (!detectedOp) {
@@ -69,6 +74,9 @@ export default function App() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>رازيق تليكوم | Razik Telecom</Text>
         <Text style={styles.headerSubtitle}>تطبيق الموزعين ونقاط البيع المعتمدة</Text>
+        <TouchableOpacity style={styles.agentModeButton} onPress={() => setCollectionAgentMode(true)}>
+          <Text style={styles.agentModeButtonText}>Collection Agent Sign In</Text>
+        </TouchableOpacity>
 
         {/* Balance Card */}
         <View style={styles.balanceCard}>
@@ -169,6 +177,19 @@ const styles = StyleSheet.create({
     color: '#d1fae5',
     textAlign: 'center',
     marginTop: 4,
+  },
+  agentModeButton: {
+    alignSelf: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 10,
+  },
+  agentModeButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   balanceCard: {
     backgroundColor: 'rgba(255,255,255,0.15)',

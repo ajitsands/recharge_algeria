@@ -127,3 +127,14 @@ To restart the servers after the 8-hour break:
      npx vite --port 5173 --host 127.0.0.1
      ```
    - Open browser at: `http://127.0.0.1:5173/`
+
+4. **Local Phone / POS QR Access:**
+   - To let phones on the same Wi-Fi reach the PHP-served app, run from the project root:
+     ```powershell
+     php -S 0.0.0.0:3031 -t e:\algeria_recharge
+     ```
+   - Find the computer's current Wi-Fi IPv4 address with `ipconfig`, choose **Local Wi-Fi Testing** in the QR dialog, and enter that address. The phone must use the same Wi-Fi.
+   - If Windows Firewall blocks the phone, add a narrowly scoped inbound rule in an elevated PowerShell. Replace the example subnet with the Wi-Fi subnet shown by `ipconfig`:
+     ```powershell
+     New-NetFirewallRule -DisplayName "Razik Telecom local QR TCP 3031" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3031 -RemoteAddress "192.168.8.0/24" -Profile Public
+     ```

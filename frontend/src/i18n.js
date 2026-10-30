@@ -15,16 +15,21 @@ export const translations = {
 
     // Navigation
     navDashboard: "لوحة المؤشرات",
+    navOperations: "القائمة الرئيسية",
     navDealers: "إدارة الموزعين والمحلات",
     navRecharges: "سجل عمليات الشحن",
     navTopups: "طلبات شحن المحفظة",
     navCommissions: "نسب العمولات والشبكات",
     navComplaints: "مركز الشكاوى والنزاعات",
     navSettings: "إعدادات النظام",
+    operatorRatesTab: "نسب المتعاملين",
+    generalSettingsTab: "الإعدادات العامة",
 
     // Auth
     login: "تسجيل الدخول",
     logout: "تسجيل الخروج",
+    signingIn: "جارٍ تسجيل الدخول...",
+    loginFailed: "تعذر تسجيل الدخول. تحقق من بياناتك وحاول مرة أخرى.",
     username: "اسم المستخدم",
     password: "كلمة المرور",
     phone: "رقم الهاتف",
@@ -110,16 +115,21 @@ export const translations = {
 
     // Navigation
     navDashboard: "Dashboard",
+    navOperations: "Main Menu",
     navDealers: "Dealers & Stores",
     navRecharges: "Recharge Transactions",
     navTopups: "Wallet Top-up Requests",
     navCommissions: "Operators & Rates",
     navComplaints: "Disputes & Support",
     navSettings: "System Settings",
+    operatorRatesTab: "Operator Rates",
+    generalSettingsTab: "General Settings",
 
     // Auth
     login: "Sign In",
     logout: "Log Out",
+    signingIn: "Signing in...",
+    loginFailed: "Sign-in failed. Check your credentials and try again.",
     username: "Username",
     password: "Password",
     phone: "Phone Number",

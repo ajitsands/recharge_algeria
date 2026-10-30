@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS `users` (
     `phone` VARCHAR(20) UNIQUE NOT NULL,
     `email` VARCHAR(100) NULL,
     `password_hash` VARCHAR(255) NOT NULL,
-    `role` ENUM('admin', 'dealer', 'finance', 'support') DEFAULT 'dealer',
+    `role` ENUM('admin', 'dealer', 'finance', 'support', 'collection_agent') DEFAULT 'dealer',
+    `collection_owner_id` INT NULL,
     `full_name` VARCHAR(100) NOT NULL,
     `business_name` VARCHAR(100) NULL,
     `wilaya` VARCHAR(50) DEFAULT 'Algiers',
@@ -44,7 +45,8 @@ CREATE TABLE IF NOT EXISTS `users` (
     `theme_preference` VARCHAR(10) DEFAULT 'light',
     `last_login` TIMESTAMP NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `users_collection_owner` (`collection_owner_id`, `role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. Telecom Operators & Services
@@ -98,7 +100,7 @@ CREATE TABLE IF NOT EXISTS `wallet_transactions` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `transaction_ref` VARCHAR(50) UNIQUE NOT NULL,
     `user_id` INT NOT NULL,
-    `type` ENUM('credit_topup', 'recharge_debit', 'commission_credit', 'refund', 'adjustment') NOT NULL,
+    `type` ENUM('credit_topup', 'recharge_debit', 'commission_credit', 'refund', 'adjustment', 'debt_payment') NOT NULL,
     `amount` DECIMAL(12, 2) NOT NULL, -- Absolute amount
     `balance_before` DECIMAL(12, 2) NOT NULL,
     `balance_after` DECIMAL(12, 2) NOT NULL,
@@ -107,6 +109,27 @@ CREATE TABLE IF NOT EXISTS `wallet_transactions` (
     `created_by` INT NULL, -- admin or dealer
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Confirmed cash collections that reduce a dealer's outstanding vendor debt
+CREATE TABLE IF NOT EXISTS `collection_transactions` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `transaction_ref` VARCHAR(50) UNIQUE NOT NULL,
+    `dealer_user_id` INT NOT NULL,
+    `agent_user_id` INT NOT NULL,
+    `amount` DECIMAL(12, 2) NOT NULL,
+    `outstanding_before` DECIMAL(12, 2) NOT NULL,
+    `outstanding_after` DECIMAL(12, 2) NOT NULL,
+    `confirmation_code_hash` VARCHAR(255) NOT NULL,
+    `expires_at` DATETIME NOT NULL,
+    `attempt_count` INT NOT NULL DEFAULT 0,
+    `status` VARCHAR(20) NOT NULL DEFAULT 'pending',
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `confirmed_at` DATETIME NULL,
+    INDEX `collection_agent_created` (`agent_user_id`, `created_at`),
+    INDEX `collection_dealer_created` (`dealer_user_id`, `created_at`),
+    FOREIGN KEY (`dealer_user_id`) REFERENCES `users`(`id`),
+    FOREIGN KEY (`agent_user_id`) REFERENCES `users`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. Wallet Top-Up Requests (Dealer to Admin)

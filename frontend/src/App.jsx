@@ -2,13 +2,40 @@ import React, { useState, useEffect } from 'react';
 import AlgerianArtHeader from './components/AlgerianArtHeader';
 import AdminPortal from './components/AdminPortal';
 import DealerMobileApp from './components/DealerMobileApp';
+import CollectionAgentWebApp from './components/CollectionAgentWebApp';
 import MobileAccessQRModal from './components/MobileAccessQRModal';
 import PoweredByProfileModal from './components/PoweredByProfileModal';
 import { translations } from './i18n';
 
+const AUTH_SESSION_KEY = 'razik_auth_session';
+
+function readAuthSession() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const saved = localStorage.getItem(AUTH_SESSION_KEY);
+    if (!saved) return null;
+
+    const session = JSON.parse(saved);
+    const [payload] = String(session.token || '').split('.');
+    const claims = payload ? JSON.parse(atob(payload)) : null;
+    if (!session.user || !claims?.exp || claims.exp <= Date.now() / 1000) {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      return null;
+    }
+    return session;
+  } catch (error) {
+    console.warn('Could not restore the saved sign-in session:', error);
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    return null;
+  }
+}
+
 export default function App() {
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const isDirectMobile = searchParams ? (searchParams.get('mode') === 'mobile' || searchParams.get('view') === 'mobile') : false;
+  const mobileMode = searchParams?.get('mode') || searchParams?.get('view');
+  const isCollectionAgentMode = mobileMode === 'collection-agent';
+  const isDirectMobile = mobileMode === 'mobile' || isCollectionAgentMode;
 
   const [mode, setModeState] = useState(() => {
     if (isDirectMobile) return 'mobile';
@@ -37,6 +64,17 @@ export default function App() {
 
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [companyProfileOpen, setCompanyProfileOpen] = useState(false);
+  const [authSession, setAuthSession] = useState(readAuthSession);
+
+  const handleLogin = (session) => {
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+    setAuthSession(session);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    setAuthSession(null);
+  };
 
   const setMode = (newMode) => {
     setModeState(newMode);
@@ -57,6 +95,14 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('razik_app_theme', newTheme);
     }
+  };
+
+  const openMobileMode = (nextMode) => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', nextMode);
+    url.searchParams.delete('view');
+    window.location.assign(url.toString());
   };
 
   const t = translations[lang] || translations.ar;
@@ -80,15 +126,19 @@ export default function App() {
         padding: 0,
         margin: 0
       }}>
-        <DealerMobileApp
-          t={t}
-          lang={lang}
-          theme={theme}
-          setLang={setLang}
-          setTheme={setTheme}
-          onOpenQrModal={() => setQrModalOpen(true)}
-          isDirectMobile={true}
-        />
+        {isCollectionAgentMode ? (
+          <CollectionAgentWebApp lang={lang} onBack={() => openMobileMode('mobile')} />
+        ) : (
+          <DealerMobileApp
+            t={t}
+            lang={lang}
+            theme={theme}
+            setLang={setLang}
+            setTheme={setTheme}
+            onOpenQrModal={() => setQrModalOpen(true)}
+            isDirectMobile={true}
+          />
+        )}
 
         <MobileAccessQRModal
           open={qrModalOpen}
@@ -111,12 +161,22 @@ export default function App() {
         setTheme={setTheme}
         t={t}
         onOpenQrModal={() => setQrModalOpen(true)}
+        currentUser={authSession?.user || null}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
       />
 
       {/* Main Workspace (100% Full Viewport Width) */}
       <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column' }}>
         {mode === 'admin' ? (
-          <AdminPortal t={t} lang={lang} theme={theme} onOpenQrModal={() => setQrModalOpen(true)} />
+          <AdminPortal
+            t={t}
+            lang={lang}
+            theme={theme}
+            onOpenQrModal={() => setQrModalOpen(true)}
+            currentUser={authSession?.user || null}
+            authToken={authSession?.token || null}
+          />
         ) : (
           <div style={{ width: '100%', flex: 1, padding: '24px 32px' }}>
             <DealerMobileApp
