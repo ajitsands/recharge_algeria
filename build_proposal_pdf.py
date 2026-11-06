@@ -1,4 +1,10 @@
 import os
+import base64
+
+logo_path = os.path.join("Logo", "SaNDSLab-LogoNewUpdated copy.png")
+with open(logo_path, "rb") as lf:
+    sands_logo_b64 = base64.b64encode(lf.read()).decode("ascii")
+sands_logo_data_uri = f"data:image/png;base64,{sands_logo_b64}"
 
 html_content = """<!DOCTYPE html>
 <html lang="en">
@@ -372,17 +378,56 @@ html_content = """<!DOCTYPE html>
     color: #64748b;
   }
 
-  /* Running Header */
+  /*Running Header */
   .header-running {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 6.8pt;
     color: #94a3b8;
     border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 2px;
+    padding-bottom: 3px;
     margin-bottom: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+  }
+
+  .sands-running-brand {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .sands-running-logo-img {
+    height: 19px;
+    width: auto;
+    display: block;
+    object-fit: contain;
+  }
+
+  /* SaNDS Lab Official Brand Logo Component */
+  .cover-brand-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .sands-logo-card {
+    display: inline-flex;
+    align-items: center;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-left: 4px solid #8bc53f;
+    border-radius: 8px;
+    padding: 6px 12px;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+  }
+
+  .sands-cover-logo-img {
+    height: 46px;
+    width: auto;
+    display: block;
+    object-fit: contain;
   }
 </style>
 </head>
@@ -391,22 +436,27 @@ html_content = """<!DOCTYPE html>
 <!-- PAGE 1: COVER PAGE -->
 <div class="cover-page">
   <div class="cover-top">
-    <div class="brand-tag">
-      RAZIK TELECOM
-      <span class="badge-algeria">ALGIERS, ALGERIA</span>
+    <div class="cover-brand-bar">
+      <div class="brand-tag" style="margin-bottom: 0;">
+        RAZIK TELECOM
+        <span class="badge-algeria">ALGIERS, ALGERIA</span>
+      </div>
+      <div class="sands-logo-card">
+        <img src="__SANDS_LOGO_DATA_URI__" alt="SaNDS Lab Middle East W.L.L" class="sands-cover-logo-img" />
+      </div>
     </div>
-    <div class="cover-title">Commercial & Technical Project Proposal</div>
-    <div class="cover-subtitle">Turnkey Telecom Credit Distribution ERP & Multi-Channel POS Platform</div>
+    <div class="cover-title">Commercial &amp; Technical Project Proposal</div>
+    <div class="cover-subtitle">Turnkey Telecom Credit Distribution ERP &amp; Multi-Channel POS Platform</div>
     
     <div class="callout callout-info">
-      <strong>Scope Reference:</strong> Grounded in <code>docs/Razik_Telecom_Detailed_ERP_Scoping_Report_v0.1.pdf</code> and the operational baseline delivered by SaNDS Lab Middle East W.L.L.
+      <strong>Scope Reference:</strong> Grounded in <code>docs/Razik_Telecom_Detailed_ERP_Scoping_Report_v0.1.pdf</code> and the operational baseline delivered by <strong>SaNDS Lab Middle East W.L.L</strong>.
     </div>
   </div>
 
   <table class="cover-meta-table">
     <thead>
       <tr>
-        <th colspan="2">Document Metadata & Project Baseline</th>
+        <th colspan="2">Document Metadata &amp; Project Baseline</th>
       </tr>
     </thead>
     <tbody>
@@ -420,15 +470,15 @@ html_content = """<!DOCTYPE html>
       </tr>
       <tr>
         <td class="field-name">Prepared For</td>
-        <td class="field-val"><strong>Razik Telecom</strong> (Owner & Management)</td>
+        <td class="field-val"><strong>Razik Telecom</strong> (Owner &amp; Management — Algiers, Algeria)</td>
       </tr>
       <tr>
         <td class="field-name">Prepared By</td>
-        <td class="field-val"><strong>SaNDS Lab Middle East W.L.L</strong> (Engineering & Architecture)</td>
+        <td class="field-val"><strong>SaNDS Lab Middle East W.L.L</strong> (Kingdom of Bahrain &bull; CR: 181123-1)</td>
       </tr>
       <tr>
         <td class="field-name">Geographic Scope</td>
-        <td class="field-val">Algiers & Surrounding Wilayas, Algeria</td>
+        <td class="field-val">Algiers &amp; Surrounding Wilayas, Algeria</td>
       </tr>
       <tr>
         <td class="field-name">Telecom Operators</td>
@@ -439,6 +489,14 @@ html_content = """<!DOCTYPE html>
         <td class="field-val">Android Mobile APK, Widescreen 1920px Web Portal, Windows POS Terminal</td>
       </tr>
       <tr>
+        <td class="field-name">Application &amp; Mobile Branding</td>
+        <td class="field-val"><strong>SaNDS Lab Middle East W.L.L</strong> branding &amp; logo integrated across both the <strong>Web Application</strong> and <strong>Mobile Apps</strong></td>
+      </tr>
+      <tr>
+        <td class="field-name">Total Turnkey Project Cost</td>
+        <td class="field-val"><strong style="color: #006233; font-size: 9.5pt;">&euro;11,500 (11,500 EUR)</strong> <span style="color: #475569; font-size: 7.8pt;">(Eleven Thousand Five Hundred Euros — All-Inclusive Turnkey Delivery)</span></td>
+      </tr>
+      <tr>
         <td class="field-name">Classification</td>
         <td class="field-val"><span class="badge badge-warning">Commercial-in-Confidence</span></td>
       </tr>
@@ -446,17 +504,20 @@ html_content = """<!DOCTYPE html>
   </table>
 
   <div class="cover-highlight-card">
-    <strong>Executive Proposition:</strong> This proposal presents the complete turnkey plan to transform Razik Telecom from an owner-dependent manual recharge operation into an automated, auditable, high-concurrency distribution switch. The system provides retail agents with sub-3-second automated recharges, ensures 100% financial control over post-sale credit and instalment collections, and establishes an extensible foundation for bill utilities and B2B electronics commerce.
+    <strong>Executive Proposition:</strong> This proposal presents the complete turnkey plan to transform Razik Telecom from an owner-dependent manual recharge operation into an automated, auditable, high-concurrency distribution switch for a total turnkey investment of <strong>&euro;11,500 (11,500 EUR)</strong>. The system provides retail agents with sub-3-second automated recharges, ensures 100% financial control over post-sale credit and instalment collections, features official <strong>SaNDS Lab Middle East W.L.L</strong> branding across both the Web Application and Mobile Apps, and establishes an extensible foundation for bill utilities and B2B electronics commerce.
   </div>
 
   <div class="cover-footer">
     <div>
-      <div>Razik Telecom ERP Modernization Initiative</div>
-      <div>Confidential &copy; 2026 Razik Telecom & SaNDS Lab Middle East W.L.L</div>
+      <div style="font-weight: 700; color: #0f172a;">Razik Telecom ERP Modernization Initiative</div>
+      <div>Confidential &copy; 2026 Razik Telecom &amp; SaNDS Lab Middle East W.L.L</div>
+      <div>Salmabad, Kingdom of Bahrain | Tel: +973 77931123 | Web: www.sandslab.com</div>
     </div>
-    <div class="engineer-stamp">
-      SaNDS Lab Middle East W.L.L<br>
-      <span style="font-size: 7.5pt; font-weight: normal; color: #64748b;">Enterprise Systems Engineering</span>
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;">
+      <img src="__SANDS_LOGO_DATA_URI__" alt="SaNDS Lab Middle East W.L.L" style="height: 30px; width: auto; display: block; object-fit: contain;" />
+      <div class="engineer-stamp" style="font-size: 7pt; font-weight: 600; color: #64748b;">
+        Enterprise Systems Engineering &bull; CR: 181123-1
+      </div>
     </div>
   </div>
 </div>
@@ -464,8 +525,8 @@ html_content = """<!DOCTYPE html>
 <!-- PAGE 2: EXEC SUMMARY & PAIN POINTS -->
 <div class="page-break"></div>
 <div class="header-running">
-  <span>Razik Telecom - Commercial & Technical Proposal</span>
-  <span>PROP-RAZIK-2026-V1</span>
+  <span>Razik Telecom - Commercial &amp; Technical Proposal &bull; PROP-RAZIK-2026-V1</span>
+  <span class="sands-running-brand"><img src="__SANDS_LOGO_DATA_URI__" alt="SaNDS Lab Middle East W.L.L" class="sands-running-logo-img" /></span>
 </div>
 
 <h1>1. Executive Summary & Strategic Context</h1>
@@ -536,8 +597,8 @@ html_content = """<!DOCTYPE html>
 <!-- PAGE 3: OBJECTIVES & SYSTEM ARCHITECTURE -->
 <div class="page-break"></div>
 <div class="header-running">
-  <span>Razik Telecom - Commercial & Technical Proposal</span>
-  <span>PROP-RAZIK-2026-V1</span>
+  <span>Razik Telecom - Commercial &amp; Technical Proposal &bull; PROP-RAZIK-2026-V1</span>
+  <span class="sands-running-brand"><img src="__SANDS_LOGO_DATA_URI__" alt="SaNDS Lab Middle East W.L.L" class="sands-running-logo-img" /></span>
 </div>
 
 <h1>2. Strategic Objectives & Success Metrics</h1>
@@ -640,8 +701,8 @@ html_content = """<!DOCTYPE html>
 <!-- PAGE 4: FUNCTIONAL SCOPE 6 PILLARS (ALL TOGETHER) -->
 <div class="page-break"></div>
 <div class="header-running">
-  <span>Razik Telecom - Commercial & Technical Proposal</span>
-  <span>PROP-RAZIK-2026-V1</span>
+  <span>Razik Telecom - Commercial &amp; Technical Proposal &bull; PROP-RAZIK-2026-V1</span>
+  <span class="sands-running-brand"><img src="__SANDS_LOGO_DATA_URI__" alt="SaNDS Lab Middle East W.L.L" class="sands-running-logo-img" /></span>
 </div>
 
 <h1>4. Functional Scope Breakdown (The 6 Pillars)</h1>
@@ -683,11 +744,12 @@ html_content = """<!DOCTYPE html>
   <li><strong>Daily Reconciliation:</strong> End-of-day discrepancy reporting matching operator consumption against internal ledger records.</li>
 </ul>
 
-<h2>Pillar 5: Bilingual User Experience & Multi-Channel Delivery</h2>
+<h2>Pillar 5: Bilingual User Experience, Multi-Channel Delivery &amp; Platform Branding</h2>
 <ul>
-  <li><strong>Native Arabic (RTL) & French/English (LTR):</strong> Contextual localized terminology for Algerian telecom terms (Flexy, Arsselli, Storm, Solde, Versement).</li>
+  <li><strong>Native Arabic (RTL) &amp; French/English (LTR):</strong> Contextual localized terminology for Algerian telecom terms (Flexy, Arsselli, Storm, Solde, Versement).</li>
   <li><strong>1920px Widescreen Desktop Operations Center:</strong> High-density operations dashboard featuring Algerian national emblem and live Algiers digital clock (<code>Africa/Algiers</code>).</li>
   <li><strong>Android Mobile APK:</strong> Fast, lightweight Android application designed for kiosk counter tablets and smartphones, with support for Bluetooth thermal receipt printers.</li>
+  <li><strong>SaNDS Lab Branding in Web Application &amp; Mobile Apps:</strong> Official <strong>SaNDS Lab Middle East W.L.L</strong> branding logo and engineering attribution (<em>&ldquo;Powered by SaNDS Lab Middle East W.L.L&rdquo;</em>) will be displayed inside both the <strong>Web Application</strong> (Admin Operations Console &amp; Web POS Portal) and the <strong>Mobile Apps</strong> (Dealer POS &amp; Field Collection Mobile Applications) alongside Razik Telecom&rsquo;s primary branding.</li>
 </ul>
 
 <h2>Pillar 6: Future Foundation (Bill Utilities & E-Commerce Ready)</h2>
@@ -699,8 +761,8 @@ html_content = """<!DOCTYPE html>
 <!-- PAGE 5: PROOF OF CAPABILITY, ROADMAP & TECH STACK -->
 <div class="page-break"></div>
 <div class="header-running">
-  <span>Razik Telecom - Commercial & Technical Proposal</span>
-  <span>PROP-RAZIK-2026-V1</span>
+  <span>Razik Telecom - Commercial &amp; Technical Proposal &bull; PROP-RAZIK-2026-V1</span>
+  <span class="sands-running-brand"><img src="__SANDS_LOGO_DATA_URI__" alt="SaNDS Lab Middle East W.L.L" class="sands-running-logo-img" /></span>
 </div>
 
 <h1>5. Delivered Working Baseline (Proof of Capability)</h1>
@@ -851,8 +913,8 @@ html_content = """<!DOCTYPE html>
 <!-- PAGE 6: RISKS, RACI, COMMERCIALS & SIGN-OFF -->
 <div class="page-break"></div>
 <div class="header-running">
-  <span>Razik Telecom - Commercial & Technical Proposal</span>
-  <span>PROP-RAZIK-2026-V1</span>
+  <span>Razik Telecom - Commercial &amp; Technical Proposal &bull; PROP-RAZIK-2026-V1</span>
+  <span class="sands-running-brand"><img src="__SANDS_LOGO_DATA_URI__" alt="SaNDS Lab Middle East W.L.L" class="sands-running-logo-img" /></span>
 </div>
 
 <h1>8. Controls, Risk Management & Mitigations</h1>
@@ -900,77 +962,97 @@ html_content = """<!DOCTYPE html>
   </tbody>
 </table>
 
-<h1>9. Commercial Investment & Milestone Structure</h1>
+<h1>9. Commercial Investment &amp; Milestone Structure</h1>
+
+<div class="callout callout-info" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding: 6px 12px;">
+  <div>
+    <strong>Fixed-Price Turnkey Project Investment:</strong> All-inclusive design, full-stack ERP &amp; sub-ledger engineering, Android POS APK, operator gateway integration, Algiers pilot, and 90-day post-launch warranty.<br>
+    <strong>Branding Clause:</strong> Official <strong>SaNDS Lab Middle East W.L.L</strong> branding &amp; logo attribution (<em>&ldquo;Powered by SaNDS Lab Middle East W.L.L&rdquo;</em>) will be included in both the <strong>Web Application</strong> and the <strong>Mobile Apps</strong>.
+  </div>
+  <div style="font-size: 12pt; font-weight: 900; color: #006233; white-space: nowrap; margin-left: 14px; text-align: right;">
+    &euro;11,500<br><span style="font-size: 7.5pt; font-weight: 700;">(11,500 EUR)</span>
+  </div>
+</div>
 
 <table class="data-table">
   <thead>
     <tr>
-      <th style="width: 10%;">Milestone</th>
-      <th style="width: 54%;">Delivered Work Package & Milestone Criteria</th>
-      <th style="width: 18%;">Target Timeline</th>
-      <th style="width: 18%; text-align: right;">Payment Share</th>
+      <th style="width: 8%;">Milestone</th>
+      <th style="width: 47%;">Delivered Work Package &amp; Milestone Criteria</th>
+      <th style="width: 13%;">Target Timeline</th>
+      <th style="width: 13%; text-align: right;">Payment Share</th>
+      <th style="width: 19%; text-align: right;">Amount (EUR)</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><strong>M1</strong></td>
-      <td><strong>Contract Execution & Project Kickoff:</strong> Architecture sign-off, scoping lock, environment setup.</td>
+      <td><strong>Contract Execution &amp; Project Kickoff:</strong> Architecture sign-off, scoping lock, environment setup.</td>
       <td>Week 1</td>
       <td style="text-align: right;"><strong>20%</strong></td>
+      <td style="text-align: right;"><strong>&euro;2,300 (2,300 EUR)</strong></td>
     </tr>
     <tr>
       <td><strong>M2</strong></td>
-      <td><strong>Core ERP & Financial Engine:</strong> REST API completion, sub-ledger, cash collection register & web portal.</td>
+      <td><strong>Core ERP &amp; Financial Engine:</strong> REST API completion, sub-ledger, cash collection register &amp; web portal.</td>
       <td>Week 4</td>
       <td style="text-align: right;"><strong>30%</strong></td>
+      <td style="text-align: right;"><strong>&euro;3,450 (3,450 EUR)</strong></td>
     </tr>
     <tr>
       <td><strong>M3</strong></td>
-      <td><strong>Mobile POS & Telecom Integration:</strong> Android APK packaging, Bluetooth thermal printing, and routing connectors.</td>
+      <td><strong>Mobile POS &amp; Telecom Integration:</strong> Android APK packaging, Bluetooth thermal printing, and routing connectors.</td>
       <td>Week 8</td>
       <td style="text-align: right;"><strong>25%</strong></td>
+      <td style="text-align: right;"><strong>&euro;2,875 (2,875 EUR)</strong></td>
     </tr>
     <tr>
       <td><strong>M4</strong></td>
       <td><strong>Algiers Field Pilot Sign-off:</strong> Successful 15-kiosk live pilot with verified reconciliations.</td>
       <td>Week 10</td>
       <td style="text-align: right;"><strong>15%</strong></td>
+      <td style="text-align: right;"><strong>&euro;1,725 (1,725 EUR)</strong></td>
     </tr>
     <tr>
       <td><strong>M5</strong></td>
-      <td><strong>Production Launch & Handover:</strong> Live production deployment, staff training, operational guides, warranty start.</td>
+      <td><strong>Production Launch &amp; Handover:</strong> Live production deployment, staff training, operational guides, warranty start.</td>
       <td>Week 12</td>
       <td style="text-align: right;"><strong>10%</strong></td>
+      <td style="text-align: right;"><strong>&euro;1,150 (1,150 EUR)</strong></td>
     </tr>
-    <tr style="background: #f1f5f9; font-weight: 700;">
-      <td colspan="3"><strong>Total Turnkey Project Delivery</strong></td>
+    <tr style="background: #f0fdf4; font-weight: 800; color: #0f172a;">
+      <td colspan="3"><strong>Total Turnkey Project Investment (Eleven Thousand Five Hundred Euros)</strong></td>
       <td style="text-align: right;"><strong>100%</strong></td>
+      <td style="text-align: right; color: #006233; font-size: 8.5pt; white-space: nowrap;"><strong>&euro;11,500 (11,500 EUR)</strong></td>
     </tr>
   </tbody>
 </table>
 
-<div class="avoid-break" style="margin-top: 10px;">
-  <h1>10. Formal Acceptance & Authorization</h1>
-  <p style="font-size: 8pt; margin-bottom: 8px;">
-    By signing below, the parties confirm their agreement to the technical scope, delivery roadmap, and commercial terms set forth in this document.
+<div class="avoid-break" style="margin-top: 8px;">
+  <h1>10. Formal Acceptance &amp; Authorization</h1>
+  <p style="font-size: 7.8pt; margin-bottom: 6px;">
+    By signing below, the parties confirm their agreement to the technical scope, delivery roadmap, application &amp; mobile apps branding terms, and commercial investment of <strong>&euro;11,500 (11,500 EUR)</strong> set forth in this document.
   </p>
 
   <div class="signature-grid">
     <div class="signature-box">
       <h4>Authorized for Razik Telecom</h4>
       <p style="margin: 0; font-size: 7.8pt;"><strong>Name:</strong> Razik Telecom Management</p>
-      <p style="margin: 0; font-size: 7.8pt;"><strong>Title:</strong> Owner & Managing Director</p>
+      <p style="margin: 0; font-size: 7.8pt;"><strong>Title:</strong> Owner &amp; Managing Director (Algiers, Algeria)</p>
       <div class="sign-line"></div>
-      <div class="sign-label">Signature & Official Stamp</div>
+      <div class="sign-label">Signature &amp; Official Stamp</div>
       <p style="margin: 4px 0 0 0; font-size: 7.2pt; color: #64748b;"><strong>Date:</strong> _____ / _____ / 2026</p>
     </div>
 
     <div class="signature-box">
-      <h4>Authorized for SaNDS Lab Middle East W.L.L</h4>
-      <p style="margin: 0; font-size: 7.8pt;"><strong>Name:</strong> Lead Enterprise Architect</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 6px;">
+        <h4 style="margin: 0; border: none; padding: 0;">Authorized for SaNDS Lab Middle East W.L.L</h4>
+        <img src="__SANDS_LOGO_DATA_URI__" alt="SaNDS Lab Middle East W.L.L" style="height: 22px; width: auto; display: block; object-fit: contain;" />
+      </div>
+      <p style="margin: 0; font-size: 7.8pt;"><strong>Entity:</strong> SaNDS Lab Middle East W.L.L (CR: 181123-1, Bahrain)</p>
       <p style="margin: 0; font-size: 7.8pt;"><strong>Title:</strong> Engineering Delivery Director</p>
       <div class="sign-line"></div>
-      <div class="sign-label">Signature & Official Stamp</div>
+      <div class="sign-label">Signature &amp; Official Stamp</div>
       <p style="margin: 4px 0 0 0; font-size: 7.2pt; color: #64748b;"><strong>Date:</strong> _____ / _____ / 2026</p>
     </div>
   </div>
@@ -978,7 +1060,7 @@ html_content = """<!DOCTYPE html>
 
 </body>
 </html>
-"""
+""".replace("__SANDS_LOGO_DATA_URI__", sands_logo_data_uri)
 
 with open("proposal_print.html", "w", encoding="utf-8") as f:
     f.write(html_content)

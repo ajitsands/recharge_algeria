@@ -1,9 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { api } from '../api';
+import { localizedText } from '../i18n';
+import LanguageSelector from './LanguageSelector';
+import CompanyLogo from './CompanyLogo';
 
-const money = (value) => `${Number(value || 0).toLocaleString()} DZD`;
+const money = (value, lang) => `${Number(value || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} DZD`;
 
-export default function CollectionAgentWebApp({ lang, onBack }) {
+export default function CollectionAgentWebApp({ lang, setLang, onBack, companyName, companyLogo }) {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [session, setSession] = useState(null);
   const [dealers, setDealers] = useState([]);
@@ -44,7 +47,7 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
   const signIn = async (event) => {
     event.preventDefault();
     if (!credentials.username.trim() || !credentials.password) {
-      setNotice({ message: isArabic ? 'أدخل اسم المستخدم وكلمة المرور.' : 'Enter your username and password.', error: true });
+      setNotice({ message: localizedText(lang, 'أدخل اسم المستخدم وكلمة المرور.', 'Enter your username and password.'), error: true });
       return;
     }
     setBusy(true);
@@ -53,7 +56,7 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
       const result = await api.login(credentials);
       if (!result.success) throw new Error(result.error || 'Sign in failed.');
       if (result.user?.role !== 'collection_agent') {
-        throw new Error(isArabic ? 'هذا التطبيق مخصص لحسابات المحصلين.' : 'This sign-in is for collection agent accounts only.');
+        throw new Error(localizedText(lang, 'هذا التطبيق مخصص لحسابات المحصلين.', 'This sign-in is for collection agent accounts only.'));
       }
       await refreshData(result.token);
       setSession({ token: result.token, user: result.user });
@@ -68,7 +71,7 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
     event.preventDefault();
     const paymentAmount = Number(amount);
     if (!selectedDealer || !Number.isFinite(paymentAmount) || paymentAmount <= 0) {
-      setNotice({ message: isArabic ? 'اختر محلاً وأدخل مبلغاً صالحاً.' : 'Select a shop and enter a valid amount.', error: true });
+      setNotice({ message: localizedText(lang, 'اختر محلاً وأدخل مبلغاً صالحاً.', 'Select a shop and enter a valid amount.'), error: true });
       return;
     }
     setBusy(true);
@@ -88,7 +91,7 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
   const confirmCollection = async (event) => {
     event.preventDefault();
     if (!/^\d{6}$/.test(confirmationCode)) {
-      setNotice({ message: isArabic ? 'أدخل الرمز المكوّن من 6 أرقام.' : 'Enter the six-digit code from the shopkeeper.', error: true });
+      setNotice({ message: localizedText(lang, 'أدخل الرمز المكوّن من 6 أرقام.', 'Enter the six-digit code from the shopkeeper.'), error: true });
       return;
     }
     setBusy(true);
@@ -99,7 +102,7 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
         confirmation_code: confirmationCode
       }, session.token);
       if (!result.success) throw new Error(result.error || 'Payment confirmation failed.');
-      setNotice({ message: isArabic ? 'تم تأكيد الدفع وتسجيله.' : 'Cash payment confirmed and recorded.' });
+      setNotice({ message: localizedText(lang, 'تم تأكيد الدفع وتسجيله.', 'Cash payment confirmed and recorded.') });
       setConfirmation(null);
       setConfirmationCode('');
       setAmount('');
@@ -158,16 +161,21 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
         zIndex: 2
       }}>
         <div>
-          <strong style={{ display: 'block', fontSize: '17px' }}>Razik Telecom</strong>
-          <span style={{ fontSize: '12px', opacity: 0.9 }}>{isArabic ? 'تطبيق محصل الديون' : 'Collection Agent App'}</span>
+          <strong style={{ display: 'block', fontSize: '17px' }}>{companyName || 'Razik Telecom'}</strong>
+          <span style={{ fontSize: '12px', opacity: 0.9 }}>{localizedText(lang, 'تطبيق محصل الديون', 'Collection Agent App')}</span>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <LanguageSelector
+            lang={lang}
+            setLang={setLang}
+            style={{ fontWeight: 700 }}
+          />
           <button type="button" onClick={onBack} style={{ border: 0, borderRadius: '8px', padding: '8px 10px', cursor: 'pointer', fontWeight: 700 }}>
-            {isArabic ? 'نقطة البيع' : 'POS'}
+            {localizedText(lang, 'نقطة البيع', 'POS')}
           </button>
           {session && (
             <button type="button" onClick={() => { setSession(null); setConfirmation(null); }} style={{ border: '1px solid rgba(255,255,255,.6)', borderRadius: '8px', padding: '8px 10px', background: 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>
-              {isArabic ? 'خروج' : 'Sign out'}
+              {localizedText(lang, 'خروج', 'Sign out')}
             </button>
           )}
         </div>
@@ -188,41 +196,45 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
 
         {!session ? (
           <form onSubmit={signIn} style={{ padding: '20px', borderRadius: '18px', background: 'var(--bg-surface)', boxShadow: '0 8px 24px rgba(15,23,42,.08)' }}>
-            <h1 style={{ margin: '0 0 6px', fontSize: '21px' }}>{isArabic ? 'تسجيل دخول المحصل' : 'Collection Agent Sign In'}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              <CompanyLogo logo={companyLogo} size={52} />
+              <strong style={{ fontSize: '18px', color: 'var(--algeria-green)' }}>{companyName || 'Razik Telecom'}</strong>
+            </div>
+            <h1 style={{ margin: '0 0 6px', fontSize: '21px' }}>{localizedText(lang, 'تسجيل دخول المحصل', 'Collection Agent Sign In')}</h1>
             <p style={{ margin: '0 0 18px', color: 'var(--text-secondary)', fontSize: '14px' }}>
-              {isArabic ? 'استخدم الحساب الذي أنشأه المسؤول أو الموزع.' : 'Use the agent account created by your admin or dealer.'}
+              {localizedText(lang, 'استخدم الحساب الذي أنشأه المسؤول أو الموزع.', 'Use the agent account created by your admin or dealer.')}
             </p>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 700 }}>
-              {isArabic ? 'اسم المستخدم' : 'Username'}
+              {localizedText(lang, 'اسم المستخدم', 'Username')}
               <input autoComplete="username" value={credentials.username} onChange={(event) => setCredentials({ ...credentials, username: event.target.value })} style={inputStyle} />
             </label>
             <label style={{ display: 'block', marginTop: '14px', fontSize: '13px', fontWeight: 700 }}>
-              {isArabic ? 'كلمة المرور' : 'Password'}
+              {localizedText(lang, 'كلمة المرور', 'Password')}
               <input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} style={inputStyle} />
             </label>
-            <button type="submit" disabled={busy} style={buttonStyle}>{busy ? '…' : (isArabic ? 'دخول' : 'Sign In')}</button>
+            <button type="submit" disabled={busy} style={buttonStyle}>{busy ? '…' : (localizedText(lang, 'دخول', 'Sign In'))}</button>
           </form>
         ) : (
           <>
             <section style={{ padding: '16px', marginBottom: '14px', borderRadius: '16px', background: 'var(--bg-surface)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '12px' }}>{isArabic ? 'مرحباً' : 'Signed in as'}</span>
+                <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '12px' }}>{localizedText(lang, 'مرحباً', 'Signed in as')}</span>
                 <strong>{session.user.full_name}</strong>
               </div>
               <button type="button" onClick={() => refreshData().catch((error) => setNotice({ message: error.message, error: true }))} style={{ border: '1px solid var(--border-subtle)', borderRadius: '9px', padding: '8px 10px', background: 'var(--bg-surface)', color: 'var(--algeria-green)', fontWeight: 700 }}>
-                {isArabic ? 'تحديث' : 'Refresh'}
+                {localizedText(lang, 'تحديث', 'Refresh')}
               </button>
             </section>
 
             <section style={{ padding: '18px', marginBottom: '14px', borderRadius: '18px', background: 'var(--bg-surface)', boxShadow: '0 8px 24px rgba(15,23,42,.06)' }}>
-              <h2 style={{ margin: '0 0 14px', fontSize: '18px' }}>{isArabic ? 'تحصيل دفعة من محل' : 'Collect dealer payment'}</h2>
+              <h2 style={{ margin: '0 0 14px', fontSize: '18px' }}>{localizedText(lang, 'تحصيل دفعة من محل', 'Collect dealer payment')}</h2>
               {!confirmation ? (
                 <>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: 700 }}>
-                    {isArabic ? 'ابحث عن المحل' : 'Find dealer / shop'}
+                    {localizedText(lang, 'ابحث عن المحل', 'Find dealer / shop')}
                     <input value={selectedDealer ? `${selectedDealer.full_name}${selectedDealer.business_name ? ` · ${selectedDealer.business_name}` : ''}` : search}
                       onChange={(event) => { setSelectedDealer(null); setSearch(event.target.value); }}
-                      placeholder={isArabic ? 'الاسم أو المتجر أو الهاتف' : 'Name, shop, phone or wilaya'}
+                      placeholder={localizedText(lang, 'الاسم أو المتجر أو الهاتف', 'Name, shop, phone or wilaya')}
                       style={inputStyle} />
                   </label>
                   {!selectedDealer && (
@@ -231,31 +243,31 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
                         <button key={dealer.id} type="button" onClick={() => { setSelectedDealer(dealer); setSearch(''); setAmount(Number(dealer.outstanding_debt) > 0 ? String(dealer.outstanding_debt) : ''); }}
                           style={{ display: 'block', width: '100%', textAlign: 'start', padding: '12px', marginBottom: '6px', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>
                           <strong style={{ display: 'block' }}>{dealer.full_name}</strong>
-                          <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{dealer.business_name || dealer.phone} · {isArabic ? 'الدين' : 'Debt'}: {money(dealer.outstanding_debt)}</span>
+                          <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{dealer.business_name || dealer.phone} · {localizedText(lang, 'الدين', 'Debt')}: {money(dealer.outstanding_debt, lang)}</span>
                         </button>
                       ))}
-                      {!filteredDealers.length && <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{isArabic ? 'لا توجد محلات نشطة.' : 'No active assigned shops found.'}</p>}
+                      {!filteredDealers.length && <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{localizedText(lang, 'لا توجد محلات نشطة.', 'No active assigned shops found.')}</p>}
                     </div>
                   )}
                   {selectedDealer && (
                     <>
                       <div style={{ marginTop: '12px', padding: '12px', borderRadius: '12px', background: 'var(--bg-surface-alt)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                          <span>{isArabic ? 'الرصيد المستحق' : 'Outstanding debt'}</span><strong>{money(selectedDealer.outstanding_debt)}</strong>
+                          <span>{localizedText(lang, 'الرصيد المستحق', 'Outstanding debt')}</span><strong>{money(selectedDealer.outstanding_debt, lang)}</strong>
                         </div>
                         <button type="button" onClick={() => { setSelectedDealer(null); setAmount(''); }} style={{ marginTop: '8px', border: 0, background: 'transparent', padding: 0, color: 'var(--algeria-green)', cursor: 'pointer', fontWeight: 700 }}>
-                          {isArabic ? 'اختيار محل آخر' : 'Change shop'}
+                          {localizedText(lang, 'اختيار محل آخر', 'Change shop')}
                         </button>
                       </div>
                       <form onSubmit={startCollection}>
                         <label style={{ display: 'block', marginTop: '14px', fontSize: '13px', fontWeight: 700 }}>
-                          {isArabic ? 'المبلغ النقدي المستلم (دج)' : 'Cash received (DZD)'}
+                          {localizedText(lang, 'المبلغ النقدي المستلم (دج)', 'Cash received (DZD)')}
                           <input type="number" min="0.01" max={selectedDealer.outstanding_debt} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} style={inputStyle} />
                         </label>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: 0 }}>
-                          {isArabic ? 'لا يمكن أن يتجاوز المبلغ الدين المستحق.' : 'Payment cannot exceed the outstanding debt.'}
+                          {localizedText(lang, 'لا يمكن أن يتجاوز المبلغ الدين المستحق.', 'Payment cannot exceed the outstanding debt.')}
                         </p>
-                        <button type="submit" disabled={busy} style={buttonStyle}>{isArabic ? 'إنشاء رمز تأكيد للعميل' : 'Create customer confirmation code'}</button>
+                        <button type="submit" disabled={busy} style={buttonStyle}>{localizedText(lang, 'إنشاء رمز تأكيد للعميل', 'Create customer confirmation code')}</button>
                       </form>
                     </>
                   )}
@@ -263,33 +275,33 @@ export default function CollectionAgentWebApp({ lang, onBack }) {
               ) : (
                 <form onSubmit={confirmCollection}>
                   <div style={{ padding: '14px', borderRadius: '12px', background: 'var(--algeria-green-light)', textAlign: 'center' }}>
-                    <strong style={{ display: 'block' }}>{isArabic ? 'دع صاحب المحل يراجع المبلغ' : 'Ask the shopkeeper to review the payment'}</strong>
-                    <span style={{ display: 'block', margin: '8px 0', fontSize: '19px', fontWeight: 900 }}>{money(confirmation.amount)}</span>
+                    <strong style={{ display: 'block' }}>{localizedText(lang, 'دع صاحب المحل يراجع المبلغ', 'Ask the shopkeeper to review the payment')}</strong>
+                    <span style={{ display: 'block', margin: '8px 0', fontSize: '19px', fontWeight: 900 }}>{money(confirmation.amount, lang)}</span>
                     <span style={{ display: 'block', fontSize: '12px' }}>{confirmation.dealer_name}{confirmation.business_name ? ` · ${confirmation.business_name}` : ''}</span>
-                    <span style={{ display: 'block', marginTop: '10px', fontSize: '12px' }}>{isArabic ? 'يعطيك صاحب المحل الرمز بعد الموافقة. ينتهي خلال 10 دقائق.' : 'After checking the amount, the shopkeeper gives you their code. It expires in 10 minutes.'}</span>
+                    <span style={{ display: 'block', marginTop: '10px', fontSize: '12px' }}>{localizedText(lang, 'يعطيك صاحب المحل الرمز بعد الموافقة. ينتهي خلال 10 دقائق.', 'After checking the amount, the shopkeeper gives you their code. It expires in 10 minutes.')}</span>
                     <strong style={{ display: 'block', marginTop: '10px', fontSize: '28px', letterSpacing: '8px', fontFamily: 'monospace' }}>{confirmation.confirmation_code}</strong>
                   </div>
                   <label style={{ display: 'block', marginTop: '14px', fontSize: '13px', fontWeight: 700 }}>
-                    {isArabic ? 'رمز التأكيد من صاحب المحل' : 'Six-digit code from shopkeeper'}
+                    {localizedText(lang, 'رمز التأكيد من صاحب المحل', 'Six-digit code from shopkeeper')}
                     <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={confirmationCode} onChange={(event) => setConfirmationCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" style={{ ...inputStyle, textAlign: 'center', letterSpacing: '8px', fontSize: '20px' }} />
                   </label>
-                  <button type="submit" disabled={busy} style={buttonStyle}>{isArabic ? 'تأكيد استلام الدفع' : 'Confirm cash payment'}</button>
+                  <button type="submit" disabled={busy} style={buttonStyle}>{localizedText(lang, 'تأكيد استلام الدفع', 'Confirm cash payment')}</button>
                   <button type="button" disabled={busy} onClick={() => { setConfirmation(null); setConfirmationCode(''); }} style={{ ...buttonStyle, marginTop: '8px', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
-                    {isArabic ? 'إلغاء التحصيل' : 'Cancel collection'}
+                    {localizedText(lang, 'إلغاء التحصيل', 'Cancel collection')}
                   </button>
                 </form>
               )}
             </section>
 
             <section style={{ padding: '18px', borderRadius: '18px', background: 'var(--bg-surface)' }}>
-              <h2 style={{ margin: '0 0 12px', fontSize: '17px' }}>{isArabic ? 'آخر عمليات التحصيل المؤكدة' : 'Recent confirmed collections'}</h2>
-              {!history.length ? <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{isArabic ? 'لا توجد عمليات مؤكدة.' : 'No confirmed collections yet.'}</p> : history.slice(0, 10).map((item) => (
+              <h2 style={{ margin: '0 0 12px', fontSize: '17px' }}>{localizedText(lang, 'آخر عمليات التحصيل المؤكدة', 'Recent confirmed collections')}</h2>
+              {!history.length ? <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{localizedText(lang, 'لا توجد عمليات مؤكدة.', 'No confirmed collections yet.')}</p> : history.slice(0, 10).map((item) => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', padding: '10px 0', borderTop: '1px solid var(--border-subtle)' }}>
                   <div>
                     <strong style={{ display: 'block', fontSize: '13px' }}>{item.dealer_name}{item.business_name ? ` · ${item.business_name}` : ''}</strong>
                     <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>{item.transaction_ref} · {item.confirmed_at || item.created_at}</span>
                   </div>
-                  <strong style={{ whiteSpace: 'nowrap', fontSize: '13px' }}>{money(item.amount)}</strong>
+                  <strong style={{ whiteSpace: 'nowrap', fontSize: '13px' }}>{money(item.amount, lang)}</strong>
                 </div>
               ))}
             </section>

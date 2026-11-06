@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { localizedStatus, localizedText } from '../i18n';
 import { 
   LayoutDashboard, Users, History, CreditCard, Percent, LifeBuoy, Settings,
   TrendingUp, AlertTriangle, CheckCircle, Clock, XCircle, Search, RefreshCw,
@@ -9,7 +10,59 @@ import { api } from '../api';
 import DataTable from './DataTable';
 import { formatDateTime } from '../formatDateTime';
 
-export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser, authToken }) {
+const MAX_COMPANY_LOGO_SIZE = 45 * 1024;
+
+function optimizeCompanyLogo(file) {
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    return Promise.reject(new Error('Choose a PNG, JPEG, or WebP image.'));
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    return Promise.reject(new Error('Choose an image smaller than 10 MB.'));
+  }
+
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = async () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Could not process the selected image.'));
+        return;
+      }
+
+      for (const maxDimension of [320, 256, 192, 128, 96]) {
+        const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+        for (const quality of [0.85, 0.7, 0.55]) {
+          const blob = await new Promise((blobResolve) => canvas.toBlob(blobResolve, 'image/webp', quality));
+          if (!blob) continue;
+          if (blob.size > MAX_COMPANY_LOGO_SIZE) continue;
+
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error || new Error('Could not read the processed image.'));
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+
+      reject(new Error('The image could not be reduced enough. Choose a simpler logo image.'));
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not open the selected image.'));
+    };
+    image.src = objectUrl;
+  });
+}
+
+export default function AdminPortal({ t, lang, theme, onOpenQrModal, onBrandingChange, currentUser, authToken }) {
   const validTabs = ['dashboard', 'dealers', 'collection_agents', 'recharges', 'topups', 'complaints', 'settings'];
   
   const [activeTab, setActiveTabState] = useState(() => {
@@ -50,7 +103,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     currency_symbol_ar: 'د.ج',
     date_format: 'd/m/Y H:i',
     default_language: 'ar',
-    default_theme: 'light'
+    default_theme: 'light',
+    company_name: '',
+    company_logo: ''
   });
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -107,14 +162,14 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     try {
       const res = await api.createCollectionAgent(agentModal, agentAdminToken);
       if (!res.success) {
-        notify(res.error || (lang === 'ar' ? 'تعذر إنشاء حساب المحصل.' : 'Could not create collection agent.'), true);
+        notify(res.error || (localizedText(lang, 'تعذر إنشاء حساب المحصل.', 'Could not create collection agent.')), true);
         return;
       }
       notify(res.message);
       setAgentModal({ open: false, username: '', full_name: '', phone: '', password: '' });
       const agentsRes = await api.getCollectionAgents(agentAdminToken);
       if (agentsRes.success) setCollectionAgents(agentsRes.agents || []);
-      else setAgentAdminError(agentsRes.error || (lang === 'ar' ? 'تعذر تحديث قائمة المحصلين.' : 'Could not refresh collection agents.'));
+      else setAgentAdminError(agentsRes.error || (localizedText(lang, 'تعذر تحديث قائمة المحصلين.', 'Could not refresh collection agents.')));
     } finally {
       setAgentSubmitting(false);
     }
@@ -124,11 +179,11 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     event.preventDefault();
     const { dealer, admin_username, admin_password, new_password, confirm_password } = dealerPasswordModal;
     if (new_password.length < 8) {
-      setDealerPasswordModal((current) => ({ ...current, error: lang === 'ar' ? 'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.' : 'Password must be at least 8 characters.' }));
+      setDealerPasswordModal((current) => ({ ...current, error: localizedText(lang, 'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.', 'Password must be at least 8 characters.') }));
       return;
     }
     if (new_password !== confirm_password) {
-      setDealerPasswordModal((current) => ({ ...current, error: lang === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'Passwords do not match.' }));
+      setDealerPasswordModal((current) => ({ ...current, error: localizedText(lang, 'كلمتا المرور غير متطابقتين.', 'Passwords do not match.') }));
       return;
     }
 
@@ -137,7 +192,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
       const login = await api.login({ username: admin_username, password: admin_password });
       if (!login.success) throw new Error(login.error || 'Admin sign in failed.');
       if (login.user?.role !== 'admin') {
-        throw new Error(lang === 'ar' ? 'يجب استخدام حساب مسؤول المورّد.' : 'Sign in with a vendor administrator account.');
+        throw new Error(localizedText(lang, 'يجب استخدام حساب مسؤول المورّد.', 'Sign in with a vendor administrator account.'));
       }
 
       const result = await api.resetDealerPassword({
@@ -156,7 +211,13 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
         error: '',
         submitting: false
       });
-      notify(lang === 'ar' ? `تمت إعادة تعيين كلمة مرور ${dealer.full_name}.` : `Password reset for ${dealer.full_name}.`);
+      notify(
+        lang === 'ar'
+          ? `تمت إعادة تعيين كلمة مرور ${dealer.full_name}.`
+          : lang === 'fr'
+            ? `Mot de passe réinitialisé pour ${dealer.full_name}.`
+            : `Password reset for ${dealer.full_name}.`
+      );
     } catch (error) {
       setDealerPasswordModal((current) => ({ ...current, submitting: false, error: error.message }));
     }
@@ -169,9 +230,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     try {
       const res = await api.login(agentAdminCredentials);
       if (!res.success) {
-        setAgentAdminError(res.error || (lang === 'ar' ? 'تعذر تسجيل الدخول.' : 'Sign in failed.'));
+        setAgentAdminError(res.error || (localizedText(lang, 'تعذر تسجيل الدخول.', 'Sign in failed.')));
       } else if (res.user?.role !== 'admin') {
-        setAgentAdminError(lang === 'ar' ? 'يجب تسجيل الدخول بحساب مسؤول المورّد.' : 'Sign in with a vendor administrator account.');
+        setAgentAdminError(localizedText(lang, 'يجب تسجيل الدخول بحساب مسؤول المورّد.', 'Sign in with a vendor administrator account.'));
       } else {
         setAgentAdminToken(res.token);
         setAgentAdminCredentials({ username: '', password: '' });
@@ -200,7 +261,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
       if (rcRes.success) setRecharges(rcRes.recharges);
       if (tpRes.success) setTopupRequests(tpRes.requests);
       if (cpRes.success) setComplaints(cpRes.complaints);
-      if (cfgRes.success && cfgRes.settings) setSystemSettings(prev => ({ ...prev, ...cfgRes.settings }));
+      if (cfgRes.success && cfgRes.settings) {
+        setSystemSettings(prev => ({ ...prev, ...cfgRes.settings }));
+        onBrandingChange?.(cfgRes.settings);
+      }
     } catch (err) {
       console.error(err);
       notify("Failed to connect to backend", true);
@@ -242,7 +306,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
         setAgentAdminError('');
       } else {
         setCollectionAgents([]);
-        setAgentAdminError(res.error || (lang === 'ar' ? 'تعذر تحميل حسابات المحصلين.' : 'Could not load collection agents.'));
+        setAgentAdminError(res.error || (localizedText(lang, 'تعذر تحميل حسابات المحصلين.', 'Could not load collection agents.')));
       }
     });
 
@@ -251,7 +315,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
 
   const handleApproveDealer = async (userId, decision) => {
     if (currentUser?.role !== 'admin' || !authToken) {
-      notify(lang === 'ar' ? 'سجّل الدخول بحساب مسؤول المورّد أولاً.' : 'Sign in with a vendor administrator account first.', true);
+      notify(localizedText(lang, 'سجّل الدخول بحساب مسؤول المورّد أولاً.', 'Sign in with a vendor administrator account first.'), true);
       return;
     }
     const res = await api.approveDealer({ user_id: userId, decision }, authToken);
@@ -266,7 +330,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
   const handleCreateDealer = async (event) => {
     event.preventDefault();
     if (currentUser?.role !== 'admin' || !authToken) {
-      setDealerCreateModal((current) => ({ ...current, error: lang === 'ar' ? 'سجّل الدخول بحساب مسؤول المورّد أولاً.' : 'Sign in with a vendor administrator account first.' }));
+      setDealerCreateModal((current) => ({ ...current, error: localizedText(lang, 'سجّل الدخول بحساب مسؤول المورّد أولاً.', 'Sign in with a vendor administrator account first.') }));
       return;
     }
     setDealerCreateModal((current) => ({ ...current, submitting: true, error: '' }));
@@ -294,7 +358,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
         error: '',
         submitting: false
       });
-      notify(result.message || (lang === 'ar' ? 'تم إنشاء حساب المحل.' : 'Dealer account created.'));
+      notify(result.message || (localizedText(lang, 'تم إنشاء حساب المحل.', 'Dealer account created.')));
       await loadAllData();
     } catch (error) {
       setDealerCreateModal((current) => ({ ...current, submitting: false, error: error.message }));
@@ -303,12 +367,12 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
 
   const handleDealerStatus = async (dealer, status) => {
     if (currentUser?.role !== 'admin' || !authToken) {
-      notify(lang === 'ar' ? 'سجّل الدخول بحساب مسؤول المورّد أولاً.' : 'Sign in with a vendor administrator account first.', true);
+      notify(localizedText(lang, 'سجّل الدخول بحساب مسؤول المورّد أولاً.', 'Sign in with a vendor administrator account first.'), true);
       return;
     }
     const result = await api.setDealerStatus({ dealer_id: dealer.id, status }, authToken);
     if (!result.success) {
-      notify(result.error || (lang === 'ar' ? 'تعذر تحديث حالة المحل.' : 'Could not update dealer status.'), true);
+      notify(result.error || (localizedText(lang, 'تعذر تحديث حالة المحل.', 'Could not update dealer status.')), true);
       return;
     }
     notify(result.message);
@@ -362,7 +426,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     const description = providerAdjustmentModal.description.trim();
     const amount = Number(providerAdjustmentModal.amount);
     if (!providerAdjustmentModal.operator || !Number.isFinite(amount) || amount <= 0 || !description) {
-      notify(lang === 'ar' ? 'يرجى إدخال مبلغ صحيح ووصف للعملية.' : 'Enter a valid amount and transaction description.', true);
+      notify(localizedText(lang, 'يرجى إدخال مبلغ صحيح ووصف للعملية.', 'Enter a valid amount and transaction description.'), true);
       return;
     }
 
@@ -375,7 +439,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
         description
       });
       if (!res.success) {
-        notify(res.error || (lang === 'ar' ? 'تعذر تعديل رصيد المتعامل.' : 'Provider balance adjustment failed.'), true);
+        notify(res.error || (localizedText(lang, 'تعذر تعديل رصيد المتعامل.', 'Provider balance adjustment failed.')), true);
         return;
       }
 
@@ -395,7 +459,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
       return;
     }
     setProviderLedgerModal({ open: true, operator, transactions: [], loading: false });
-    notify(res.error || (lang === 'ar' ? 'تعذر تحميل سجل المتعامل.' : 'Could not load provider ledger.'), true);
+    notify(res.error || (localizedText(lang, 'تعذر تحميل سجل المتعامل.', 'Could not load provider ledger.')), true);
   };
 
   const openDealerLedger = async (dealer) => {
@@ -406,14 +470,14 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
       return;
     }
     setDealerLedgerModal({ open: true, dealer, transactions: [], loading: false });
-    notify(res.error || (lang === 'ar' ? 'تعذر تحميل سجل المحل.' : 'Could not load dealer/store ledger.'), true);
+    notify(res.error || (localizedText(lang, 'تعذر تحميل سجل المحل.', 'Could not load dealer/store ledger.')), true);
   };
 
   const handleResolveTicket = async (e) => {
     e.preventDefault();
     if (!complaintModal.ticket) return;
     if (currentUser?.role !== 'admin' || !authToken) {
-      notify(lang === 'ar' ? 'يلزم تسجيل الدخول بحساب مسؤول لمعالجة النزاعات.' : 'Sign in as an administrator to resolve disputes.', true);
+      notify(localizedText(lang, 'يلزم تسجيل الدخول بحساب مسؤول لمعالجة النزاعات.', 'Sign in as an administrator to resolve disputes.'), true);
       return;
     }
     setComplaintSubmitting(true);
@@ -440,7 +504,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     e.preventDefault();
     if (!undoRefundModal.ticket || !undoRefundModal.confirmed) return;
     if (currentUser?.role !== 'admin' || !authToken) {
-      notify(lang === 'ar' ? 'يلزم تسجيل الدخول بحساب مسؤول لعكس الاسترجاع.' : 'Sign in as an administrator to undo a refund.', true);
+      notify(localizedText(lang, 'يلزم تسجيل الدخول بحساب مسؤول لعكس الاسترجاع.', 'Sign in as an administrator to undo a refund.'), true);
       return;
     }
 
@@ -448,7 +512,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     try {
       const res = await api.undoComplaintRefund({ complaint_id: undoRefundModal.ticket.id }, authToken);
       if (!res.success) {
-        notify(res.error || (lang === 'ar' ? 'تعذر عكس الاسترجاع.' : 'Could not undo the refund.'), true);
+        notify(res.error || (localizedText(lang, 'تعذر عكس الاسترجاع.', 'Could not undo the refund.')), true);
         return;
       }
       notify(res.message);
@@ -467,10 +531,14 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
       recharge,
       subject: lang === 'ar' 
         ? `نزاع شحن رصيد - مرجع ${recharge.recharge_ref}` 
-        : `Recharge Dispute - Ref ${recharge.recharge_ref}`,
+        : lang === 'fr'
+          ? `Litige de recharge - Réf. ${recharge.recharge_ref}`
+          : `Recharge Dispute - Ref ${recharge.recharge_ref}`,
       description: lang === 'ar'
         ? `الزبون أبلغ بعدم وصول رصيد الشحن إلى رقمه (${recharge.phone_number}). تم فتح تذكرة نزاع وتوجيهها للتحقيق الفني مع المتعامل.`
-        : `Customer reported balance not received for phone ${recharge.phone_number}. Flagged for NOC operator investigation.`,
+        : lang === 'fr'
+          ? `Le client signale ne pas avoir reçu la recharge sur le numéro ${recharge.phone_number}. Ticket transmis pour vérification auprès de l’opérateur.`
+          : `Customer reported balance not received for phone ${recharge.phone_number}. Flagged for NOC operator investigation.`,
       status: 'investigating'
     });
   };
@@ -489,7 +557,9 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     if (res.success) {
       notify(lang === 'ar' 
         ? `تم تسجيل النزاع وحالته: قيد التحقيق (Investigating) - تذكرة: ${res.ticket_ref}` 
-        : `Dispute booked with status Investigating! Ticket: ${res.ticket_ref}`);
+        : lang === 'fr'
+          ? `Litige enregistré avec le statut En cours d’examen ! Ticket : ${res.ticket_ref}`
+          : `Dispute booked with status Investigating! Ticket: ${res.ticket_ref}`);
       setDisputeModal({ open: false, recharge: null, subject: '', description: '', status: 'investigating' });
       await loadAllData();
       setActiveTab('complaints'); // Automatically redirect to Dispute Center
@@ -501,16 +571,32 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     try {
-      const res = await api.updateSettings(systemSettings);
+      const settingsToSave = { ...systemSettings, company_name: systemSettings.company_name.trim() };
+      const res = await api.updateSettings(settingsToSave);
       if (res.success) {
-        notify(lang === 'ar' ? 'تم حفظ إعدادات النظام بنجاح' : 'System settings saved successfully');
+        setSystemSettings(settingsToSave);
+        onBrandingChange?.(settingsToSave);
+        notify(localizedText(lang, 'تم حفظ إعدادات النظام بنجاح', 'System settings saved successfully'));
         loadAllData();
       } else {
-        notify(res.error || (lang === 'ar' ? 'تعذر حفظ الإعدادات' : 'Failed to save settings'), true);
+        notify(res.error || (localizedText(lang, 'تعذر حفظ الإعدادات', 'Failed to save settings')), true);
       }
     } catch (err) {
       console.error(err);
-      notify(lang === 'ar' ? 'خطأ في الاتصال بالسيرفر' : 'Network error saving settings', true);
+      notify(localizedText(lang, 'خطأ في الاتصال بالسيرفر', 'Network error saving settings'), true);
+    }
+  };
+
+  const handleCompanyLogoChange = async (event) => {
+    const [file] = event.target.files || [];
+    if (!file) return;
+    try {
+      const companyLogo = await optimizeCompanyLogo(file);
+      setSystemSettings(prev => ({ ...prev, company_logo: companyLogo }));
+    } catch (error) {
+      notify(error.message || localizedText(lang, 'تعذر تحميل الشعار', 'Could not load the logo'), true);
+    } finally {
+      event.target.value = '';
     }
   };
 
@@ -541,7 +627,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
   const rechargeColumns = useMemo(() => [
     {
       key: 'recharge_ref',
-      header: lang === 'ar' ? 'رقم المرجع والوقت' : 'Ref & Time',
+      header: localizedText(lang, 'رقم المرجع والوقت', 'Ref & Time'),
       sortKey: 'id',
       render: (r) => (
         <div>
@@ -554,7 +640,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'dealer_name',
-      header: lang === 'ar' ? 'الموزع / المحل' : 'Dealer / Store',
+      header: localizedText(lang, 'الموزع / المحل', 'Dealer / Store'),
       sortKey: 'dealer_name',
       render: (r) => (
         <div>
@@ -565,7 +651,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'operator_name',
-      header: lang === 'ar' ? 'الشبكة' : 'Operator',
+      header: localizedText(lang, 'الشبكة', 'Operator'),
       sortKey: 'operator_name',
       render: (r) => (
         <span style={{
@@ -582,7 +668,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'phone_number',
-      header: lang === 'ar' ? 'رقم الزبون' : 'Customer Phone',
+      header: localizedText(lang, 'رقم الزبون', 'Customer Phone'),
       sortKey: 'phone_number',
       render: (r) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '13.5px' }}>
@@ -592,59 +678,59 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'face_value',
-      header: lang === 'ar' ? 'قيمة الشحن' : 'Face Value',
+      header: localizedText(lang, 'قيمة الشحن', 'Face Value'),
       sortKey: 'face_value',
       render: (r) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '700' }}>
-          {parseFloat(r.face_value).toLocaleString()} {currencyLabel}
+          {parseFloat(r.face_value).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
         </span>
       )
     },
     {
       key: 'commission_amount',
-      header: lang === 'ar' ? 'العمولة المقتطعة' : 'Commission',
+      header: localizedText(lang, 'العمولة المقتطعة', 'Commission'),
       sortKey: 'commission_amount',
       render: (r) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--algeria-green)' }}>
-          -{parseFloat(r.commission_amount).toLocaleString()} {currencyLabel} ({r.commission_pct}%)
+          -{parseFloat(r.commission_amount).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel} ({r.commission_pct}%)
         </span>
       )
     },
     {
       key: 'net_debited',
-      header: lang === 'ar' ? 'المخصوم من المحفظة' : 'Net Debited',
+      header: localizedText(lang, 'المخصوم من المحفظة', 'Net Debited'),
       sortKey: 'net_debited',
       render: (r) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '900', fontSize: '13.5px', color: 'var(--text-primary)' }}>
-          {parseFloat(r.net_debited).toLocaleString()} {currencyLabel}
+          {parseFloat(r.net_debited).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
         </span>
       )
     },
     {
       key: 'dealer_profit',
-      header: lang === 'ar' ? 'ربح الموزع' : 'Dealer Profit',
+      header: localizedText(lang, 'ربح الموزع', 'Dealer Profit'),
       sortKey: 'dealer_profit',
       render: (r) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '800', color: 'var(--algeria-green)' }}>
-          +{parseFloat(r.dealer_profit).toLocaleString()} {currencyLabel}
+          +{parseFloat(r.dealer_profit).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
         </span>
       )
     },
     {
       key: 'status',
-      header: lang === 'ar' ? 'الحالة' : 'Status',
+      header: localizedText(lang, 'الحالة', 'Status'),
       sortKey: 'status',
       render: (r) => (
         <span className={`badge ${
           r.status === 'success' ? 'badge-success' : r.status === 'pending' ? 'badge-pending' : 'badge-failed'
         }`}>
-          {r.status}
+          {localizedStatus(lang, r.status)}
         </span>
       )
     },
     {
       key: 'dispute_action',
-      header: lang === 'ar' ? 'تسجيل نزاع / Dispute' : 'Dispute Action',
+      header: localizedText(lang, 'تسجيل نزاع / Dispute', 'Dispute Action'),
       align: 'center',
       render: (r) => {
         if (r.complaint_id || r.complaint_status) {
@@ -652,7 +738,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
           return (
             <button
               onClick={() => setActiveTab('complaints')}
-              title={lang === 'ar' ? 'انقر للانتقال إلى مركز النزاعات ومتابعة التذكرة' : 'Click to jump to Dispute Center'}
+              title={localizedText(lang, 'انقر للانتقال إلى مركز النزاعات ومتابعة التذكرة', 'Click to jump to Dispute Center')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -668,7 +754,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               }}
             >
               <LifeBuoy style={{ width: '13px', height: '13px' }} />
-              <span>{isInvestigating ? (lang === 'ar' ? 'قيد التحقيق 🔍' : 'Investigating 🔍') : (lang === 'ar' ? 'تمت التسوية' : 'Settled')}</span>
+              <span>{isInvestigating ? (localizedText(lang, 'قيد التحقيق 🔍', 'Investigating 🔍')) : (localizedText(lang, 'تمت التسوية', 'Settled'))}</span>
             </button>
           );
         }
@@ -692,7 +778,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             }}
           >
             <AlertTriangle style={{ width: '13px', height: '13px' }} />
-            <span>{lang === 'ar' ? 'تسجيل نزاع' : 'Book Dispute'}</span>
+            <span>{localizedText(lang, 'تسجيل نزاع', 'Book Dispute')}</span>
           </button>
         );
       }
@@ -709,7 +795,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'full_name',
-      header: lang === 'ar' ? 'الموزع / المحل' : 'Dealer / Store',
+      header: localizedText(lang, 'الموزع / المحل', 'Dealer / Store'),
       sortKey: 'full_name',
       render: (d) => (
         <div>
@@ -720,51 +806,51 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'phone',
-      header: lang === 'ar' ? 'رقم الهاتف' : 'Phone',
+      header: localizedText(lang, 'رقم الهاتف', 'Phone'),
       sortKey: 'phone',
       render: (d) => <span style={{ fontFamily: 'monospace', fontWeight: '700' }}>{d.phone}</span>
     },
     {
       key: 'wilaya',
-      header: lang === 'ar' ? 'الولاية والبلدية' : 'Wilaya & Commune',
+      header: localizedText(lang, 'الولاية والبلدية', 'Wilaya & Commune'),
       sortKey: 'wilaya',
       render: (d) => <span>{d.wilaya} {d.commune ? `- ${d.commune}` : ''}</span>
     },
     {
       key: 'wallet_balance',
-      header: lang === 'ar' ? 'رصيد المحفظة المتوفر' : 'Wallet Balance',
+      header: localizedText(lang, 'رصيد المحفظة المتوفر', 'Wallet Balance'),
       sortKey: 'wallet_balance',
       render: (d) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '900', color: 'var(--algeria-green)', fontSize: '15px' }}>
-          {parseFloat(d.wallet_balance || 0).toLocaleString()} {currencyLabel}
+          {parseFloat(d.wallet_balance || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
         </span>
       )
     },
     {
       key: 'credit_limit',
-      header: lang === 'ar' ? 'السقف الائتماني' : 'Credit Limit',
+      header: localizedText(lang, 'السقف الائتماني', 'Credit Limit'),
       sortKey: 'credit_limit',
       render: (d) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '600', color: 'var(--text-secondary)' }}>
-          {parseFloat(d.credit_limit || 0).toLocaleString()} {currencyLabel}
+          {parseFloat(d.credit_limit || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
         </span>
       )
     },
     {
       key: 'status',
-      header: lang === 'ar' ? 'الحالة' : 'Status',
+      header: localizedText(lang, 'الحالة', 'Status'),
       sortKey: 'status',
       render: (d) => (
         <span className={`badge ${
           d.status === 'active' ? 'badge-success' : d.status === 'pending' ? 'badge-pending' : 'badge-failed'
         }`}>
-          {d.status}
+          {localizedStatus(lang, d.status)}
         </span>
       )
     },
     {
       key: 'actions',
-      header: lang === 'ar' ? 'الإجراءات' : 'Actions',
+      header: localizedText(lang, 'الإجراءات', 'Actions'),
       align: 'center',
       render: (d) => (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '8px' }}>
@@ -785,7 +871,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             }}
           >
             <History style={{ width: '14px', height: '14px', color: 'var(--algeria-green)' }} />
-            <span>{lang === 'ar' ? 'السجل' : 'Ledger'}</span>
+            <span>{localizedText(lang, 'السجل', 'Ledger')}</span>
           </button>
           <button
             onClick={() => setDealerPasswordModal({
@@ -813,7 +899,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             }}
           >
             <KeyRound style={{ width: '14px', height: '14px', color: 'var(--algeria-green)' }} />
-            <span>{lang === 'ar' ? 'إعادة تعيين كلمة المرور' : 'Reset Password'}</span>
+            <span>{localizedText(lang, 'إعادة تعيين كلمة المرور', 'Reset Password')}</span>
           </button>
           {d.status === 'pending' ? (
             <>
@@ -830,7 +916,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   cursor: 'pointer'
                 }}
               >
-                {lang === 'ar' ? 'موافقة وتفعيل' : 'Approve'}
+                {localizedText(lang, 'موافقة وتفعيل', 'Approve')}
               </button>
               <button
                 onClick={() => handleApproveDealer(d.id, 'rejected')}
@@ -845,7 +931,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   cursor: 'pointer'
                 }}
               >
-                {lang === 'ar' ? 'رفض' : 'Reject'}
+                {localizedText(lang, 'رفض', 'Reject')}
               </button>
             </>
           ) : (
@@ -867,7 +953,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 }}
               >
                 <PlusCircle style={{ width: '14px', height: '14px', color: 'var(--algeria-green)' }} />
-                <span>{lang === 'ar' ? 'شحن / تعديل الرصيد' : 'Adjust Wallet'}</span>
+                <span>{localizedText(lang, 'شحن / تعديل الرصيد', 'Adjust Wallet')}</span>
               </button>
               <button
                 type="button"
@@ -884,8 +970,8 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 }}
               >
                 {d.status === 'active'
-                  ? (lang === 'ar' ? 'إلغاء التفعيل' : 'Deactivate')
-                  : (lang === 'ar' ? 'تفعيل' : 'Activate')}
+                  ? (localizedText(lang, 'إلغاء التفعيل', 'Deactivate'))
+                  : (localizedText(lang, 'تفعيل', 'Activate'))}
               </button>
             </>
           )}
@@ -898,13 +984,13 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
   const topupColumns = useMemo(() => [
     {
       key: 'request_ref',
-      header: lang === 'ar' ? 'المرجع والوقت' : 'Ref & Time',
+      header: localizedText(lang, 'المرجع والوقت', 'Ref & Time'),
       sortKey: 'id',
       render: (tr) => <div style={{ fontFamily: 'monospace', fontWeight: '700' }}>{tr.request_ref}</div>
     },
     {
       key: 'dealer_name',
-      header: lang === 'ar' ? 'الموزع' : 'Dealer',
+      header: localizedText(lang, 'الموزع', 'Dealer'),
       sortKey: 'dealer_name',
       render: (tr) => (
         <div>
@@ -915,17 +1001,17 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'amount',
-      header: lang === 'ar' ? 'المبلغ المطلوب' : 'Requested Amount',
+      header: localizedText(lang, 'المبلغ المطلوب', 'Requested Amount'),
       sortKey: 'amount',
       render: (tr) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '900', color: 'var(--algeria-green)', fontSize: '16px' }}>
-          {parseFloat(tr.amount).toLocaleString()} {currencyLabel}
+          {parseFloat(tr.amount).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
         </span>
       )
     },
     {
       key: 'payment_method',
-      header: lang === 'ar' ? 'طريقة الدفع' : 'Payment Method',
+      header: localizedText(lang, 'طريقة الدفع', 'Payment Method'),
       sortKey: 'payment_method',
       render: (tr) => (
         <span style={{ padding: '4px 10px', borderRadius: '8px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-subtle)', fontWeight: '700', fontSize: '12px' }}>
@@ -935,25 +1021,25 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'proof_reference',
-      header: lang === 'ar' ? 'إيصال / مرجع الدفع' : 'Payment Proof',
+      header: localizedText(lang, 'إيصال / مرجع الدفع', 'Payment Proof'),
       sortKey: 'proof_reference',
       render: (tr) => <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{tr.proof_reference || '-'}</span>
     },
     {
       key: 'status',
-      header: lang === 'ar' ? 'الحالة' : 'Status',
+      header: localizedText(lang, 'الحالة', 'Status'),
       sortKey: 'status',
       render: (tr) => (
         <span className={`badge ${
           tr.status === 'approved' ? 'badge-success' : tr.status === 'pending' ? 'badge-pending' : 'badge-failed'
         }`}>
-          {tr.status}
+          {localizedStatus(lang, tr.status)}
         </span>
       )
     },
     {
       key: 'actions',
-      header: lang === 'ar' ? 'الإجراء' : 'Actions',
+      header: localizedText(lang, 'الإجراء', 'Actions'),
       align: 'center',
       render: (tr) => (
         <div style={{ textAlign: 'center' }}>
@@ -972,7 +1058,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   cursor: 'pointer'
                 }}
               >
-                {lang === 'ar' ? 'تأكيد وشحن المحفظة' : 'Approve & Credit'}
+                {localizedText(lang, 'تأكيد وشحن المحفظة', 'Approve & Credit')}
               </button>
               <button
                 onClick={() => handleTopupDecision(tr.id, 'rejected')}
@@ -987,12 +1073,12 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   cursor: 'pointer'
                 }}
               >
-                {lang === 'ar' ? 'رفض' : 'Reject'}
+                {localizedText(lang, 'رفض', 'Reject')}
               </button>
             </div>
           ) : (
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>
-              {lang === 'ar' ? 'تمت المعالجة' : 'Processed'}
+              {localizedText(lang, 'تمت المعالجة', 'Processed')}
             </span>
           )}
         </div>
@@ -1004,25 +1090,25 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
   const complaintColumns = useMemo(() => [
     {
       key: 'ticket_ref',
-      header: lang === 'ar' ? 'رقم التذكرة' : 'Ticket Ref',
+      header: localizedText(lang, 'رقم التذكرة', 'Ticket Ref'),
       sortKey: 'id',
       render: (c) => <span style={{ fontFamily: 'monospace', fontWeight: '800' }}>{c.ticket_ref}</span>
     },
     {
       key: 'dealer_name',
-      header: lang === 'ar' ? 'الموزع' : 'Dealer',
+      header: localizedText(lang, 'الموزع', 'Dealer'),
       sortKey: 'dealer_name',
       render: (c) => <span style={{ fontWeight: '700' }}>{c.dealer_name}</span>
     },
     {
       key: 'phone_number',
-      header: lang === 'ar' ? 'رقم الهاتف المتنازع عليه' : 'Disputed Phone',
+      header: localizedText(lang, 'رقم الهاتف المتنازع عليه', 'Disputed Phone'),
       sortKey: 'phone_number',
       render: (c) => <span style={{ fontFamily: 'monospace', fontWeight: '800' }}>{c.phone_number}</span>
     },
     {
       key: 'subject',
-      header: lang === 'ar' ? 'الموضوع والملاحظات' : 'Subject & Description',
+      header: localizedText(lang, 'الموضوع والملاحظات', 'Subject & Description'),
       sortKey: 'subject',
       render: (c) => (
         <div>
@@ -1030,7 +1116,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{c.description}</div>
           {c.admin_response && (
             <div style={{ fontSize: '11px', color: 'var(--algeria-green)', fontWeight: '700', marginTop: '4px' }}>
-              {lang === 'ar' ? 'رد الإدارة:' : 'Admin Note:'} {c.admin_response}
+              {localizedText(lang, 'رد الإدارة:', 'Admin Note:')} {c.admin_response}
             </div>
           )}
         </div>
@@ -1038,29 +1124,29 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'net_debited',
-      header: lang === 'ar' ? 'المبلغ المقتطع' : 'Net Debited',
+      header: localizedText(lang, 'المبلغ المقتطع', 'Net Debited'),
       sortKey: 'net_debited',
       render: (c) => (
         <span style={{ fontFamily: 'monospace', fontWeight: '800', color: 'var(--text-primary)' }}>
-          {c.net_debited ? `${parseFloat(c.net_debited).toLocaleString()} ${currencyLabel}` : '-'}
+          {c.net_debited ? `${parseFloat(c.net_debited).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} ${currencyLabel}` : '-'}
         </span>
       )
     },
     {
       key: 'status',
-      header: lang === 'ar' ? 'الحالة' : 'Status',
+      header: localizedText(lang, 'الحالة', 'Status'),
       sortKey: 'status',
       render: (c) => (
         <span className={`badge ${
           c.status.includes('resolved') ? 'badge-success' : c.status === 'investigating' ? 'badge-pending' : 'badge-failed'
         }`}>
-          {c.status.replace('_', ' ').toUpperCase()}
+          {localizedStatus(lang, c.status).replace('_', ' ').toUpperCase()}
         </span>
       )
     },
     {
       key: 'actions',
-      header: lang === 'ar' ? 'الإجراء' : 'Actions',
+      header: localizedText(lang, 'الإجراء', 'Actions'),
       align: 'center',
       render: (c) => (
         <div style={{ textAlign: 'center' }}>
@@ -1069,7 +1155,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               {c.recharge_id && c.recharge_status !== 'reversed' && Number(c.net_debited) > 0 ? (
                 <button
                   disabled={currentUser?.role !== 'admin' || !authToken}
-                  title={currentUser?.role !== 'admin' || !authToken ? (lang === 'ar' ? 'يلزم تسجيل دخول المسؤول' : 'Admin sign-in required') : ''}
+                  title={currentUser?.role !== 'admin' || !authToken ? (localizedText(lang, 'يلزم تسجيل دخول المسؤول', 'Admin sign-in required')) : ''}
                   onClick={() => setComplaintModal({ open: true, ticket: c, status: 'resolved_refunded', response: 'Refund approved by admin', refund: true })}
                   style={{
                     padding: '6px 10px',
@@ -1083,12 +1169,12 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                     opacity: currentUser?.role === 'admin' && authToken ? 1 : 0.55
                   }}
                 >
-                  {lang === 'ar' ? 'معالجة واسترجاع للمحفظة' : 'Resolve & Refund'}
+                  {localizedText(lang, 'معالجة واسترجاع للمحفظة', 'Resolve & Refund')}
                 </button>
               ) : (
                 <button
                   disabled={currentUser?.role !== 'admin' || !authToken}
-                  title={currentUser?.role !== 'admin' || !authToken ? (lang === 'ar' ? 'يلزم تسجيل دخول المسؤول' : 'Admin sign-in required') : ''}
+                  title={currentUser?.role !== 'admin' || !authToken ? (localizedText(lang, 'يلزم تسجيل دخول المسؤول', 'Admin sign-in required')) : ''}
                   onClick={() => setComplaintModal({ open: true, ticket: c, status: 'resolved_confirmed', response: '', refund: false })}
                   style={{
                     padding: '6px 10px',
@@ -1102,7 +1188,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                     opacity: currentUser?.role === 'admin' && authToken ? 1 : 0.55
                   }}
                 >
-                  {lang === 'ar' ? 'مراجعة وتسوية' : 'Review & Resolve'}
+                  {localizedText(lang, 'مراجعة وتسوية', 'Review & Resolve')}
                 </button>
               )}
             </div>
@@ -1110,7 +1196,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             c.status === 'resolved_refunded' && c.recharge_status === 'reversed' ? (
               <button
                 disabled={currentUser?.role !== 'admin' || !authToken}
-                title={currentUser?.role !== 'admin' || !authToken ? (lang === 'ar' ? 'يلزم تسجيل دخول المسؤول' : 'Admin sign-in required') : ''}
+                title={currentUser?.role !== 'admin' || !authToken ? (localizedText(lang, 'يلزم تسجيل دخول المسؤول', 'Admin sign-in required')) : ''}
                 onClick={() => setUndoRefundModal({ open: true, ticket: c, confirmed: false })}
                 style={{
                   padding: '6px 10px',
@@ -1124,12 +1210,12 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   opacity: currentUser?.role === 'admin' && authToken ? 1 : 0.55
                 }}
               >
-                {lang === 'ar' ? 'عكس الاسترجاع' : 'Undo Refund'}
+                {localizedText(lang, 'عكس الاسترجاع', 'Undo Refund')}
               </button>
             ) : (
               <span style={{ color: 'var(--algeria-green)', fontWeight: '700', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <CheckCircle style={{ width: '14px', height: '14px' }} />
-                <span>{lang === 'ar' ? 'تمت التسوية' : 'Settled'}</span>
+                <span>{localizedText(lang, 'تمت التسوية', 'Settled')}</span>
               </span>
             )
           )}
@@ -1141,7 +1227,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
   const dealerLedgerColumns = useMemo(() => [
     {
       key: 'created_at',
-      header: lang === 'ar' ? 'التاريخ' : 'Date',
+      header: localizedText(lang, 'التاريخ', 'Date'),
       sortKey: 'created_at',
       render: (transaction) => (
         <span style={{ whiteSpace: 'nowrap' }}>
@@ -1151,18 +1237,18 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'type',
-      header: lang === 'ar' ? 'النوع' : 'Type',
+      header: localizedText(lang, 'النوع', 'Type'),
       sortKey: 'type',
       render: (transaction) => {
         const isCredit = ['credit_topup', 'commission_credit', 'refund', 'refund_credit', 'debt_payment'].includes(transaction.type);
         const typeLabel = {
-          credit_topup: lang === 'ar' ? 'إضافة رصيد' : 'Wallet credit',
-          recharge_debit: lang === 'ar' ? 'خصم شحن' : 'Recharge debit',
-          commission_credit: lang === 'ar' ? 'عمولة' : 'Commission',
-          refund: lang === 'ar' ? 'استرجاع' : 'Refund',
-          refund_credit: lang === 'ar' ? 'استرجاع' : 'Refund',
-          adjustment: lang === 'ar' ? 'تعديل' : 'Adjustment',
-          debt_payment: lang === 'ar' ? 'سداد دين نقدي' : 'Cash debt payment'
+          credit_topup: localizedText(lang, 'إضافة رصيد', 'Wallet credit'),
+          recharge_debit: localizedText(lang, 'خصم شحن', 'Recharge debit'),
+          commission_credit: localizedText(lang, 'عمولة', 'Commission'),
+          refund: localizedText(lang, 'استرجاع', 'Refund'),
+          refund_credit: localizedText(lang, 'استرجاع', 'Refund'),
+          adjustment: localizedText(lang, 'تعديل', 'Adjustment'),
+          debt_payment: localizedText(lang, 'سداد دين نقدي', 'Cash debt payment')
         }[transaction.type] || transaction.type;
         return (
           <span style={{ color: isCredit ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: '800', whiteSpace: 'nowrap' }}>
@@ -1173,29 +1259,29 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
     },
     {
       key: 'amount',
-      header: lang === 'ar' ? 'المبلغ' : 'Amount',
+      header: localizedText(lang, 'المبلغ', 'Amount'),
       sortKey: 'amount',
       render: (transaction) => (
         <span style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', fontWeight: '800' }}>
-          {parseFloat(transaction.amount).toLocaleString()} {currencyLabel}
+          {parseFloat(transaction.amount).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
         </span>
       )
     },
     {
       key: 'balance_before',
-      header: lang === 'ar' ? 'الرصيد قبل' : 'Before',
+      header: localizedText(lang, 'الرصيد قبل', 'Before'),
       sortKey: 'balance_before',
-      render: (transaction) => <span style={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_before).toLocaleString()}</span>
+      render: (transaction) => <span style={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_before).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')}</span>
     },
     {
       key: 'balance_after',
-      header: lang === 'ar' ? 'الرصيد بعد' : 'After',
+      header: localizedText(lang, 'الرصيد بعد', 'After'),
       sortKey: 'balance_after',
-      render: (transaction) => <span style={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_after).toLocaleString()}</span>
+      render: (transaction) => <span style={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_after).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')}</span>
     },
     {
       key: 'notes',
-      header: lang === 'ar' ? 'الوصف' : 'Description',
+      header: localizedText(lang, 'الوصف', 'Description'),
       sortKey: 'notes',
       cellStyle: { minWidth: '200px' },
       render: (transaction) => (
@@ -1275,16 +1361,16 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             style={{ width: 'min(460px, 94vw)' }}
           >
             <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {lang === 'ar' ? 'إنشاء حساب محصل' : 'Create Collection Agent'}
+              {localizedText(lang, 'إنشاء حساب محصل', 'Create Collection Agent')}
             </h3>
             <p style={{ margin: '0 0 18px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-              {lang === 'ar' ? 'سيستخدم المحصل هذه البيانات لتسجيل الدخول إلى تطبيق الهاتف.' : 'The agent will use these credentials to sign in to the mobile app.'}
+              {localizedText(lang, 'سيستخدم المحصل هذه البيانات لتسجيل الدخول إلى تطبيق الهاتف.', 'The agent will use these credentials to sign in to the mobile app.')}
             </p>
             {[
-              ['full_name', lang === 'ar' ? 'الاسم الكامل' : 'Full name', 'text'],
-              ['username', lang === 'ar' ? 'اسم المستخدم' : 'Username', 'text'],
-              ['phone', lang === 'ar' ? 'رقم الهاتف' : 'Phone number', 'tel'],
-              ['password', lang === 'ar' ? 'كلمة المرور (8 أحرف على الأقل)' : 'Password (at least 8 characters)', 'password']
+              ['full_name', localizedText(lang, 'الاسم الكامل', 'Full name'), 'text'],
+              ['username', localizedText(lang, 'اسم المستخدم', 'Username'), 'text'],
+              ['phone', localizedText(lang, 'رقم الهاتف', 'Phone number'), 'tel'],
+              ['password', localizedText(lang, 'كلمة المرور (8 أحرف على الأقل)', 'Password (at least 8 characters)'), 'password']
             ].map(([field, label, type]) => (
               <label key={field} style={{ display: 'block', marginBottom: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
                 {label}
@@ -1301,10 +1387,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             ))}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
               <button type="button" disabled={agentSubmitting} onClick={() => setAgentModal({ open: false, username: '', full_name: '', phone: '', password: '' })} style={{ padding: '9px 14px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                {localizedText(lang, 'إلغاء', 'Cancel')}
               </button>
               <button type="submit" disabled={agentSubmitting} style={{ padding: '9px 14px', border: 'none', borderRadius: '8px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: agentSubmitting ? 'wait' : 'pointer' }}>
-                {agentSubmitting ? (lang === 'ar' ? 'جارٍ الإنشاء...' : 'Creating...') : (lang === 'ar' ? 'إنشاء الحساب' : 'Create account')}
+                {agentSubmitting ? (localizedText(lang, 'جارٍ الإنشاء...', 'Creating...')) : (localizedText(lang, 'إنشاء الحساب', 'Create account'))}
               </button>
             </div>
           </form>
@@ -1323,18 +1409,18 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             style={{ width: 'min(460px, 94vw)' }}
           >
             <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {lang === 'ar' ? 'إعادة تعيين كلمة مرور الموزّع' : 'Reset Dealer Password'}
+              {localizedText(lang, 'إعادة تعيين كلمة مرور الموزّع', 'Reset Dealer Password')}
             </h3>
             <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
               {dealerPasswordModal.dealer?.full_name}{dealerPasswordModal.dealer?.business_name ? ` · ${dealerPasswordModal.dealer.business_name}` : ''}
               {' — '}
-              {lang === 'ar' ? 'أدخل بيانات مسؤول المورّد وكلمة مرور جديدة.' : 'Verify your vendor admin account and enter a new password.'}
+              {localizedText(lang, 'أدخل بيانات مسؤول المورّد وكلمة مرور جديدة.', 'Verify your vendor admin account and enter a new password.')}
             </p>
             {[
-              ['admin_username', lang === 'ar' ? 'اسم مستخدم مسؤول المورّد' : 'Admin username or phone', 'text', 'username'],
-              ['admin_password', lang === 'ar' ? 'كلمة مرور مسؤول المورّد' : 'Admin password', 'password', 'current-password'],
-              ['new_password', lang === 'ar' ? 'كلمة المرور الجديدة (8 أحرف على الأقل)' : 'New dealer password (at least 8 characters)', 'password', 'new-password'],
-              ['confirm_password', lang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new dealer password', 'password', 'new-password']
+              ['admin_username', localizedText(lang, 'اسم مستخدم مسؤول المورّد', 'Admin username or phone'), 'text', 'username'],
+              ['admin_password', localizedText(lang, 'كلمة مرور مسؤول المورّد', 'Admin password'), 'password', 'current-password'],
+              ['new_password', localizedText(lang, 'كلمة المرور الجديدة (8 أحرف على الأقل)', 'New dealer password (at least 8 characters)'), 'password', 'new-password'],
+              ['confirm_password', localizedText(lang, 'تأكيد كلمة المرور الجديدة', 'Confirm new dealer password'), 'password', 'new-password']
             ].map(([field, label, type, autoComplete]) => (
               <label key={field} style={{ display: 'block', marginBottom: '12px', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
                 {label}
@@ -1360,7 +1446,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 onClick={() => setDealerPasswordModal((current) => ({ ...current, open: false }))}
                 style={{ padding: '9px 14px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer' }}
               >
-                {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                {localizedText(lang, 'إلغاء', 'Cancel')}
               </button>
               <button
                 type="submit"
@@ -1368,8 +1454,8 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 style={{ padding: '9px 14px', border: 'none', borderRadius: '8px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: dealerPasswordModal.submitting ? 'wait' : 'pointer' }}
               >
                 {dealerPasswordModal.submitting
-                  ? (lang === 'ar' ? 'جارٍ إعادة التعيين...' : 'Resetting...')
-                  : (lang === 'ar' ? 'إعادة تعيين كلمة المرور' : 'Reset Password')}
+                  ? (localizedText(lang, 'جارٍ إعادة التعيين...', 'Resetting...'))
+                  : (localizedText(lang, 'إعادة تعيين كلمة المرور', 'Reset Password'))}
               </button>
             </div>
           </form>
@@ -1388,25 +1474,25 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             style={{ width: 'min(540px, 94vw)', maxHeight: '90vh', overflowY: 'auto' }}
           >
             <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {lang === 'ar' ? 'إنشاء حساب محل جديد' : 'Create New Dealer'}
+              {localizedText(lang, 'إنشاء حساب محل جديد', 'Create New Dealer')}
             </h3>
             <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-              {lang === 'ar' ? 'سيتم تفعيل الحساب مباشرة. شارك بيانات الدخول مع صاحب المحل بأمان.' : 'The dealer account will be active immediately. Share the sign-in details securely with the shopkeeper.'}
+              {localizedText(lang, 'سيتم تفعيل الحساب مباشرة. شارك بيانات الدخول مع صاحب المحل بأمان.', 'The dealer account will be active immediately. Share the sign-in details securely with the shopkeeper.')}
             </p>
             {!authToken || currentUser?.role !== 'admin' ? (
               <p style={{ padding: '10px 12px', borderRadius: '9px', background: 'var(--algeria-gold-light)', color: 'var(--text-primary)', fontSize: '12px', fontWeight: 700 }}>
-                {lang === 'ar' ? 'سجّل الدخول كمسؤول مورّد من زر تسجيل الدخول أعلى الصفحة قبل الإنشاء.' : 'Sign in as a vendor administrator using the sign-in button at the top before creating a dealer.'}
+                {localizedText(lang, 'سجّل الدخول كمسؤول مورّد من زر تسجيل الدخول أعلى الصفحة قبل الإنشاء.', 'Sign in as a vendor administrator using the sign-in button at the top before creating a dealer.')}
               </p>
             ) : null}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
               {[
-                ['full_name', lang === 'ar' ? 'اسم صاحب المحل' : 'Shopkeeper full name', 'text'],
-                ['business_name', lang === 'ar' ? 'اسم المحل' : 'Shop name', 'text'],
-                ['username', lang === 'ar' ? 'اسم المستخدم' : 'Username', 'text'],
-                ['phone', lang === 'ar' ? 'رقم الهاتف' : 'Phone number', 'tel'],
-                ['wilaya', lang === 'ar' ? 'الولاية' : 'Wilaya', 'text'],
-                ['commune', lang === 'ar' ? 'البلدية' : 'Commune', 'text'],
-                ['password', lang === 'ar' ? 'كلمة المرور (8 أحرف على الأقل)' : 'Password (at least 8 characters)', 'password']
+                ['full_name', localizedText(lang, 'اسم صاحب المحل', 'Shopkeeper full name'), 'text'],
+                ['business_name', localizedText(lang, 'اسم المحل', 'Shop name'), 'text'],
+                ['username', localizedText(lang, 'اسم المستخدم', 'Username'), 'text'],
+                ['phone', localizedText(lang, 'رقم الهاتف', 'Phone number'), 'tel'],
+                ['wilaya', localizedText(lang, 'الولاية', 'Wilaya'), 'text'],
+                ['commune', localizedText(lang, 'البلدية', 'Commune'), 'text'],
+                ['password', localizedText(lang, 'كلمة المرور (8 أحرف على الأقل)', 'Password (at least 8 characters)'), 'password']
               ].map(([field, label, type]) => (
                 <label key={field} style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
                   {label}
@@ -1431,7 +1517,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 onClick={() => setDealerCreateModal((current) => ({ ...current, open: false }))}
                 style={{ padding: '9px 14px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer' }}
               >
-                {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                {localizedText(lang, 'إلغاء', 'Cancel')}
               </button>
               <button
                 type="submit"
@@ -1439,8 +1525,8 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 style={{ padding: '9px 14px', border: 'none', borderRadius: '8px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: dealerCreateModal.submitting ? 'wait' : 'pointer' }}
               >
                 {dealerCreateModal.submitting
-                  ? (lang === 'ar' ? 'جارٍ الإنشاء...' : 'Creating...')
-                  : (lang === 'ar' ? 'إنشاء المحل' : 'Create Dealer')}
+                  ? (localizedText(lang, 'جارٍ الإنشاء...', 'Creating...'))
+                  : (localizedText(lang, 'إنشاء المحل', 'Create Dealer'))}
               </button>
             </div>
           </form>
@@ -1529,7 +1615,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   { id: 'dealers', label: t.navDealers, icon: Users, badge: stats?.pending_dealers },
                   { id: 'recharges', label: t.navRecharges, icon: History },
                   { id: 'complaints', label: t.navComplaints, icon: LifeBuoy, badge: stats?.open_complaints },
-                  { id: 'collection_agents', label: lang === 'ar' ? 'محصلو الديون' : 'Collection Agents', icon: Users }
+                  { id: 'collection_agents', label: localizedText(lang, 'محصلو الديون', 'Collection Agents'), icon: Users }
                 ].map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
@@ -1631,7 +1717,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             title="Refresh"
           >
             <RefreshCw style={{ width: '13px', height: '13px', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            <span>{lang === 'ar' ? 'تحديث' : 'Sync'}</span>
+            <span>{localizedText(lang, 'تحديث', 'Sync')}</span>
           </button>
         </div>
       </nav>
@@ -1646,12 +1732,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             <div className="welcome-hero-banner">
               <div>
                 <h1 style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 6px 0', color: 'var(--text-primary)' }}>
-                  {lang === 'ar' ? 'مرحباً، مدير رازيق تليكوم (Algiers HQ)' : 'Welcome, Razik Telecom Administrator'}
+                  {localizedText(lang, 'مرحباً، مدير رازيق تليكوم (Algiers HQ)', 'Welcome, Razik Telecom Administrator')}
                 </h1>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
-                  {lang === 'ar' 
-                    ? 'منصة توزيع الرصيد المباشرة: إدارة الموزعين، متابعة الأرصدة الإجمالية، واحتساب العمولات الفورية'
-                    : 'Real-time multi-operator distribution platform: Dealer wallets, wholesale quotas, and auto commissions.'}
+                  {localizedText(lang, 'منصة توزيع الرصيد المباشرة: إدارة الموزعين، متابعة الأرصدة الإجمالية، واحتساب العمولات الفورية', 'Real-time multi-operator distribution platform: Dealer wallets, wholesale quotas, and auto commissions.')}
                 </p>
               </div>
 
@@ -1675,7 +1759,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   }}
                 >
                   <Smartphone style={{ width: '16px', height: '16px' }} />
-                  <span>{lang === 'ar' ? 'ربط تطبيق الهاتف (QR)' : 'Connect Mobile POS (QR)'}</span>
+                  <span>{localizedText(lang, 'ربط تطبيق الهاتف (QR)', 'Connect Mobile POS (QR)')}</span>
                 </button>
 
                 <button
@@ -1696,7 +1780,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   }}
                 >
                   <RefreshCw style={{ width: '15px', height: '15px' }} />
-                  <span>{lang === 'ar' ? 'تحديث البيانات' : 'Sync Live Data'}</span>
+                  <span>{localizedText(lang, 'تحديث البيانات', 'Sync Live Data')}</span>
                 </button>
               </div>
             </div>
@@ -1715,13 +1799,13 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                   <span style={{ fontSize: '28px', fontWeight: '900', fontFamily: 'monospace', color: 'var(--text-primary)' }}>
-                    {parseFloat(stats?.all_time?.total_volume ?? stats?.today?.total_volume ?? 0).toLocaleString()}
+                    {parseFloat(stats?.all_time?.total_volume ?? stats?.today?.total_volume ?? 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')}
                   </span>
                   <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>{currencyLabel}</span>
                 </div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', display: 'block' }}>
-                  {stats?.all_time?.total_count || 0} {lang === 'ar' ? 'عملية إجمالية' : 'total operations'}
-                  {stats?.today?.total_count > 0 && ` (${stats.today.total_count} ${lang === 'ar' ? 'اليوم' : 'today'} - ${parseFloat(stats.today.total_volume).toLocaleString()} ${currencyLabel})`}
+                  {stats?.all_time?.total_count || 0} {localizedText(lang, 'عملية إجمالية', 'total operations')}
+                  {stats?.today?.total_count > 0 && ` (${stats.today.total_count} ${localizedText(lang, 'اليوم', 'today')} - ${parseFloat(stats.today.total_volume).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} ${currencyLabel})`}
                 </span>
               </div>
 
@@ -1737,13 +1821,13 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                   <span style={{ fontSize: '28px', fontWeight: '900', fontFamily: 'monospace', color: 'var(--algeria-gold)' }}>
-                    {parseFloat(stats?.all_time?.total_commission ?? stats?.today?.total_commission ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                    {parseFloat(stats?.all_time?.total_commission ?? stats?.today?.total_commission ?? 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                   </span>
                   <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>{currencyLabel}</span>
                 </div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', display: 'block' }}>
-                  {lang === 'ar' ? 'خصم فوري مباشر لمحلات الموزعين' : 'Instant discounts granted to dealers'}
-                  {stats?.today?.total_commission > 0 && ` (${parseFloat(stats.today.total_commission).toFixed(2)} ${currencyLabel} ${lang === 'ar' ? 'اليوم' : 'today'})`}
+                  {localizedText(lang, 'خصم فوري مباشر لمحلات الموزعين', 'Instant discounts granted to dealers')}
+                  {stats?.today?.total_commission > 0 && ` (${parseFloat(stats.today.total_commission).toFixed(2)} ${currencyLabel} ${localizedText(lang, 'اليوم', 'today')})`}
                 </span>
               </div>
 
@@ -1761,17 +1845,17 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   <span style={{ fontSize: '28px', fontWeight: '900', fontFamily: 'monospace', color: 'var(--text-primary)' }}>
                     {stats?.dealers_count || 0}
                   </span>
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'محل معتمد' : 'stores'}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{localizedText(lang, 'محل معتمد', 'stores')}</span>
                 </div>
                 {stats?.pending_dealers > 0 ? (
                   <span style={{ fontSize: '12px', color: '#d97706', fontWeight: '700', marginTop: '6px', display: 'block' }}>
-                    {stats.pending_dealers} {lang === 'ar' ? 'بانتظار الموافقة والتفعيل' : 'pending approval'}
-                    {stats?.total_dealer_wallet > 0 && ` • ${parseFloat(stats.total_dealer_wallet).toLocaleString()} ${currencyLabel} ${lang === 'ar' ? 'أرصدة' : 'float'}`}
+                    {stats.pending_dealers} {localizedText(lang, 'بانتظار الموافقة والتفعيل', 'pending approval')}
+                    {stats?.total_dealer_wallet > 0 && ` • ${parseFloat(stats.total_dealer_wallet).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} ${currencyLabel} ${localizedText(lang, 'أرصدة', 'float')}`}
                   </span>
                 ) : (
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', display: 'block' }}>
-                    {lang === 'ar' ? 'جميع الحسابات نشطة' : 'All accounts verified'}
-                    {stats?.total_dealer_wallet > 0 && ` • ${parseFloat(stats.total_dealer_wallet).toLocaleString()} ${currencyLabel} ${lang === 'ar' ? 'أرصدة' : 'float'}`}
+                    {localizedText(lang, 'جميع الحسابات نشطة', 'All accounts verified')}
+                    {stats?.total_dealer_wallet > 0 && ` • ${parseFloat(stats.total_dealer_wallet).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} ${currencyLabel} ${localizedText(lang, 'أرصدة', 'float')}`}
                   </span>
                 )}
               </div>
@@ -1790,13 +1874,13 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   <span style={{ fontSize: '28px', fontWeight: '900', fontFamily: 'monospace', color: '#9333ea' }}>
                     {stats?.pending_topups || 0}
                   </span>
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'طلبات محفظة' : 'requests'}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{localizedText(lang, 'طلبات محفظة', 'requests')}</span>
                 </div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', display: 'block' }}>
                   {stats?.pending_topup_amount > 0 && (
-                    <strong style={{ color: '#9333ea' }}>{parseFloat(stats.pending_topup_amount).toLocaleString()} {currencyLabel} • </strong>
+                    <strong style={{ color: '#9333ea' }}>{parseFloat(stats.pending_topup_amount).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel} • </strong>
                   )}
-                  {lang === 'ar' ? 'تتطلب تأكيد الدفع النقدي أو بريدي موب' : 'Require cash or BaridiMob verification'}
+                  {localizedText(lang, 'تتطلب تأكيد الدفع النقدي أو بريدي موب', 'Require cash or BaridiMob verification')}
                 </span>
               </div>
 
@@ -1814,10 +1898,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   <span style={{ fontSize: '28px', fontWeight: '900', fontFamily: 'monospace', color: 'var(--algeria-red)' }}>
                     {stats?.open_complaints || 0}
                   </span>
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'شكوى مفتوحة' : 'disputes'}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{localizedText(lang, 'شكوى مفتوحة', 'disputes')}</span>
                 </div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', display: 'block' }}>
-                  {lang === 'ar' ? 'معالجة فورية مع استرجاع الرصيد' : 'Immediate refund capabilities'}
+                  {localizedText(lang, 'معالجة فورية مع استرجاع الرصيد', 'Immediate refund capabilities')}
                 </span>
               </div>
             </div>
@@ -1841,11 +1925,11 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                       fontSize: '13px',
                       fontWeight: '800'
                     }}>
-                      {lang === 'ar' ? 'إجمالي رصيد الجملة:' : 'Total Wholesale Pool:'} {parseFloat(stats.total_wholesale_balance).toLocaleString()} {currencyLabel}
+                      {localizedText(lang, 'إجمالي رصيد الجملة:', 'Total Wholesale Pool:')} {parseFloat(stats.total_wholesale_balance).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
                     </span>
                   )}
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {lang === 'ar' ? 'الرصيد المشترى بالجملة من طرف رازيق تليكوم لدى المتعاملين' : 'Wholesale credit purchased by Razik Telecom'}
+                    {localizedText(lang, 'الرصيد المشترى بالجملة من طرف رازيق تليكوم لدى المتعاملين', 'Wholesale credit purchased by Razik Telecom')}
                   </span>
                 </div>
               </div>
@@ -1876,14 +1960,14 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                           color: op.color_hex,
                           border: `1px solid ${op.color_hex}30`
                         }}>
-                          {op.default_commission_pct}% {lang === 'ar' ? 'عمولة الموزع' : 'Commission'}
+                          {op.default_commission_pct}% {localizedText(lang, 'عمولة الموزع', 'Commission')}
                         </span>
                       </div>
 
                       {/* Large Balance Display */}
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '12px 0 16px 0' }}>
                         <span style={{ fontSize: '26px', fontWeight: '900', fontFamily: 'monospace', color: 'var(--text-primary)' }}>
-                          {balance.toLocaleString()}
+                          {balance.toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')}
                         </span>
                         <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-secondary)' }}>{currencyLabel}</span>
                       </div>
@@ -1900,15 +1984,15 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        <span>{lang === 'ar' ? 'بوادئ الأرقام:' : 'Prefixes:'} <strong style={{ color: 'var(--text-primary)' }}>{op.prefixes}</strong></span>
+                        <span>{localizedText(lang, 'بوادئ الأرقام:', 'Prefixes:')} <strong style={{ color: 'var(--text-primary)' }}>{op.prefixes}</strong></span>
                         {isLow ? (
                           <span style={{ color: '#d21034', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <AlertTriangle style={{ width: '13px', height: '13px' }} />
-                            {lang === 'ar' ? 'رصيد منخفض!' : 'Low Balance!'}
+                            {localizedText(lang, 'رصيد منخفض!', 'Low Balance!')}
                           </span>
                         ) : (
                           <span style={{ color: 'var(--algeria-green)', fontWeight: '700' }}>
-                            {pctRemaining}% {lang === 'ar' ? 'متوفر' : 'Available'}
+                            {pctRemaining}% {localizedText(lang, 'متوفر', 'Available')}
                           </span>
                         )}
                       </div>
@@ -1934,7 +2018,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                           }}
                         >
                           <PlusCircle style={{ width: '15px', height: '15px' }} />
-                          {lang === 'ar' ? 'إضافة رصيد' : 'Add Amount'}
+                          {localizedText(lang, 'إضافة رصيد', 'Add Amount')}
                         </button>
                         <button
                           type="button"
@@ -1956,7 +2040,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                           }}
                         >
                           <ArrowDownLeft style={{ width: '15px', height: '15px' }} />
-                          {lang === 'ar' ? 'خصم رصيد' : 'Remove Amount'}
+                          {localizedText(lang, 'خصم رصيد', 'Remove Amount')}
                         </button>
                         <button
                           type="button"
@@ -1978,7 +2062,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                           }}
                         >
                           <History style={{ width: '15px', height: '15px' }} />
-                          {lang === 'ar' ? 'السجل' : 'Ledger'}
+                          {localizedText(lang, 'السجل', 'Ledger')}
                         </button>
                       </div>
                     </div>
@@ -1992,10 +2076,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               <div className="erp-table-header">
                 <div>
                   <h3 style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
-                    {lang === 'ar' ? 'سجل عمليات الشحن المباشرة والنزاعات (Live Transactions & Disputes)' : 'Live Recharge Transactions & Dispute Booking'}
+                    {localizedText(lang, 'سجل عمليات الشحن المباشرة والنزاعات (Live Transactions & Disputes)', 'Live Recharge Transactions & Dispute Booking')}
                   </h3>
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {lang === 'ar' ? 'جدول سريع متكامل: بحث فوري، فرز الأعمدة، وترقيم الصفحات مع إمكانية فتح نزاع مباشر لكل عملية (Investigating)' : 'High-speed interactive DataTable with live search, sorting, and 1-click dispute booking.'}
+                    {localizedText(lang, 'جدول سريع متكامل: بحث فوري، فرز الأعمدة، وترقيم الصفحات مع إمكانية فتح نزاع مباشر لكل عملية (Investigating)', 'High-speed interactive DataTable with live search, sorting, and 1-click dispute booking.')}
                   </span>
                 </div>
 
@@ -2012,7 +2096,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                     cursor: 'pointer'
                   }}
                 >
-                  {lang === 'ar' ? 'فتح السجل الكامل والمتقدم' : 'View Full Ledger'}
+                  {localizedText(lang, 'فتح السجل الكامل والمتقدم', 'View Full Ledger')}
                 </button>
               </div>
 
@@ -2025,7 +2109,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 defaultSortField="id"
                 defaultSortDir="desc"
                 lang={lang}
-                searchPlaceholder={lang === 'ar' ? 'بحث فوري في العمليات المباشرة (رقم الهاتف، المرجع، الموزع)...' : 'Search live recharges (phone, ref, dealer)...'}
+                searchPlaceholder={localizedText(lang, 'بحث فوري في العمليات المباشرة (رقم الهاتف، المرجع، الموزع)...', 'Search live recharges (phone, ref, dealer)...')}
               />
             </div>
 
@@ -2041,7 +2125,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   {t.navDealers}
                 </h2>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {lang === 'ar' ? 'إدارة حسابات الموزعين، اعتماد المحلات الجديدة، وضبط الأرصدة والسقوف الائتمانية' : 'Manage dealer KYC, approvals, wallet balances, and credit limits.'}
+                  {localizedText(lang, 'إدارة حسابات الموزعين، اعتماد المحلات الجديدة، وضبط الأرصدة والسقوف الائتمانية', 'Manage dealer KYC, approvals, wallet balances, and credit limits.')}
                 </span>
               </div>
               <button
@@ -2061,7 +2145,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', padding: '10px 14px', border: 'none', borderRadius: '9px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
               >
                 <PlusCircle style={{ width: '16px', height: '16px' }} />
-                {lang === 'ar' ? 'إضافة محل جديد' : 'Add New Dealer'}
+                {localizedText(lang, 'إضافة محل جديد', 'Add New Dealer')}
               </button>
             </div>
             <DataTable
@@ -2073,7 +2157,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               defaultSortField="id"
               defaultSortDir="asc"
               lang={lang}
-              searchPlaceholder={lang === 'ar' ? 'بحث فوري في الموزعين (الاسم، الهاتف، الولاية)...' : 'Search dealers (name, phone, wilaya)...'}
+              searchPlaceholder={localizedText(lang, 'بحث فوري في الموزعين (الاسم، الهاتف، الولاية)...', 'Search dealers (name, phone, wilaya)...')}
             />
           </div>
         )}
@@ -2082,10 +2166,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
           <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
             <div className="erp-table-container" style={{ width: '100%', maxWidth: '560px', margin: '0 auto', padding: '24px', boxSizing: 'border-box' }}>
             <h2 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', marginTop: 0 }}>
-              {lang === 'ar' ? 'تسجيل دخول مسؤول المورّد' : 'Vendor administrator sign in'}
+              {localizedText(lang, 'تسجيل دخول مسؤول المورّد', 'Vendor administrator sign in')}
             </h2>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              {lang === 'ar' ? 'يمكن لمسؤول المورّد فقط إنشاء حسابات المحصلين وإدارتها.' : 'Only vendor administrators can create and manage collection agent accounts.'}
+              {localizedText(lang, 'يمكن لمسؤول المورّد فقط إنشاء حسابات المحصلين وإدارتها.', 'Only vendor administrators can create and manage collection agent accounts.')}
             </p>
             <form onSubmit={handleAgentAdminLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '18px' }}>
               <input
@@ -2093,7 +2177,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 autoComplete="username"
                 value={agentAdminCredentials.username}
                 onChange={(event) => setAgentAdminCredentials((current) => ({ ...current, username: event.target.value }))}
-                placeholder={lang === 'ar' ? 'اسم المستخدم أو الهاتف' : 'Username or phone'}
+                placeholder={localizedText(lang, 'اسم المستخدم أو الهاتف', 'Username or phone')}
                 className="filter-input"
               />
               <input
@@ -2102,12 +2186,12 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 autoComplete="current-password"
                 value={agentAdminCredentials.password}
                 onChange={(event) => setAgentAdminCredentials((current) => ({ ...current, password: event.target.value }))}
-                placeholder={lang === 'ar' ? 'كلمة المرور' : 'Password'}
+                placeholder={localizedText(lang, 'كلمة المرور', 'Password')}
                 className="filter-input"
               />
               {agentAdminError && <p role="alert" style={{ color: 'var(--algeria-red)', fontSize: '12px', margin: 0 }}>{agentAdminError}</p>}
               <button type="submit" disabled={agentAdminSubmitting} style={{ padding: '10px 14px', border: 'none', borderRadius: '8px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: agentAdminSubmitting ? 'wait' : 'pointer' }}>
-                {agentAdminSubmitting ? (lang === 'ar' ? 'جارٍ التحقق...' : 'Signing in...') : (lang === 'ar' ? 'تسجيل الدخول' : 'Sign in')}
+                {agentAdminSubmitting ? (localizedText(lang, 'جارٍ التحقق...', 'Signing in...')) : (localizedText(lang, 'تسجيل الدخول', 'Sign in'))}
               </button>
             </form>
             </div>
@@ -2119,10 +2203,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             <div className="erp-table-header">
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
-                  {lang === 'ar' ? 'محصلو الديون' : 'Collection Agents'}
+                  {localizedText(lang, 'محصلو الديون', 'Collection Agents')}
                 </h2>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {lang === 'ar' ? 'إنشاء حسابات المحصلين وإدارة صلاحية دخولهم إلى تطبيق التحصيل.' : 'Create and manage accounts for agents collecting dealer debt.'}
+                  {localizedText(lang, 'إنشاء حسابات المحصلين وإدارة صلاحية دخولهم إلى تطبيق التحصيل.', 'Create and manage accounts for agents collecting dealer debt.')}
                 </span>
               </div>
               <button
@@ -2131,7 +2215,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap', padding: '10px 14px', border: 'none', borderRadius: '9px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
               >
                 <PlusCircle style={{ width: '16px', height: '16px' }} />
-                {lang === 'ar' ? 'إضافة محصل' : 'Add Collection Agent'}
+                {localizedText(lang, 'إضافة محصل', 'Add Collection Agent')}
               </button>
               <button
                 type="button"
@@ -2142,18 +2226,18 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 }}
                 style={{ padding: '9px 12px', border: '1px solid var(--border-strong)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', cursor: 'pointer' }}
               >
-                {lang === 'ar' ? 'تسجيل الخروج' : 'Sign out'}
+                {localizedText(lang, 'تسجيل الخروج', 'Sign out')}
               </button>
             </div>
             {agentAdminError && <p role="alert" style={{ color: 'var(--algeria-red)', fontSize: '12px' }}>{agentAdminError}</p>}
             <DataTable
               columns={[
-                { key: 'full_name', header: lang === 'ar' ? 'الاسم الكامل' : 'Full name', sortKey: 'full_name' },
-                { key: 'username', header: lang === 'ar' ? 'اسم المستخدم' : 'Username', sortKey: 'username' },
-                { key: 'phone', header: lang === 'ar' ? 'الهاتف' : 'Phone', sortKey: 'phone' },
+                { key: 'full_name', header: localizedText(lang, 'الاسم الكامل', 'Full name'), sortKey: 'full_name' },
+                { key: 'username', header: localizedText(lang, 'اسم المستخدم', 'Username'), sortKey: 'username' },
+                { key: 'phone', header: localizedText(lang, 'الهاتف', 'Phone'), sortKey: 'phone' },
                 {
                   key: 'status',
-                  header: lang === 'ar' ? 'الحالة' : 'Status',
+                  header: localizedText(lang, 'الحالة', 'Status'),
                   sortKey: 'status',
                   render: (agent) => (
                     <span style={{ color: agent.status === 'active' ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: 700 }}>
@@ -2161,7 +2245,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                     </span>
                   )
                 },
-                { key: 'last_login', header: lang === 'ar' ? 'آخر دخول' : 'Last login', sortKey: 'last_login' }
+                { key: 'last_login', header: localizedText(lang, 'آخر دخول', 'Last login'), sortKey: 'last_login' }
               ]}
               data={collectionAgents}
               keyField="id"
@@ -2170,8 +2254,8 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               defaultSortField="id"
               defaultSortDir="desc"
               lang={lang}
-              searchPlaceholder={lang === 'ar' ? 'بحث عن محصل بالاسم أو الهاتف...' : 'Search agents by name or phone...'}
-              emptyMessage={lang === 'ar' ? 'لا يوجد محصلون. أضف أول حساب محصل.' : 'No collection agents yet. Add the first agent account.'}
+              searchPlaceholder={localizedText(lang, 'بحث عن محصل بالاسم أو الهاتف...', 'Search agents by name or phone...')}
+              emptyMessage={localizedText(lang, 'لا يوجد محصلون. أضف أول حساب محصل.', 'No collection agents yet. Add the first agent account.')}
             />
           </div>
         )}
@@ -2185,7 +2269,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   {t.navRecharges}
                 </h2>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {lang === 'ar' ? 'سجل تدقيق كامل لكافة عمليات الشحن المالي ونسب الخصم والربح' : 'Complete financial audit ledger for all mobile recharges and services.'}
+                  {localizedText(lang, 'سجل تدقيق كامل لكافة عمليات الشحن المالي ونسب الخصم والربح', 'Complete financial audit ledger for all mobile recharges and services.')}
                 </span>
               </div>
 
@@ -2195,7 +2279,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   <Search style={{ width: '14px', height: '14px', position: 'absolute', top: '10px', left: lang === 'ar' ? 'auto' : '10px', right: lang === 'ar' ? '10px' : 'auto', color: 'var(--text-muted)' }} />
                   <input
                     type="text"
-                    placeholder={lang === 'ar' ? 'بحث برقم الهاتف، المرجع...' : 'Search phone, ref...'}
+                    placeholder={localizedText(lang, 'بحث برقم الهاتف، المرجع...', 'Search phone, ref...')}
                     value={rechargeFilter.search}
                     onChange={(e) => setRechargeFilter(prev => ({ ...prev, search: e.target.value }))}
                     className="filter-input"
@@ -2208,7 +2292,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   onChange={(e) => setRechargeFilter(prev => ({ ...prev, operator: e.target.value }))}
                   className="filter-input"
                 >
-                  <option value="">{lang === 'ar' ? 'جميع المتعاملين' : 'All Operators'}</option>
+                  <option value="">{localizedText(lang, 'جميع المتعاملين', 'All Operators')}</option>
                   {operators.map(op => (
                     <option key={op.id} value={op.id}>{lang === 'ar' ? op.name_ar : op.name}</option>
                   ))}
@@ -2219,11 +2303,11 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   onChange={(e) => setRechargeFilter(prev => ({ ...prev, status: e.target.value }))}
                   className="filter-input"
                 >
-                  <option value="">{lang === 'ar' ? 'جميع الحالات' : 'All Statuses'}</option>
-                  <option value="success">Success</option>
-                  <option value="pending">Pending</option>
-                  <option value="failed">Failed</option>
-                  <option value="reversed">Reversed</option>
+                  <option value="">{localizedText(lang, 'جميع الحالات', 'All Statuses')}</option>
+                  <option value="success">{localizedStatus(lang, 'success')}</option>
+                  <option value="pending">{localizedStatus(lang, 'pending')}</option>
+                  <option value="failed">{localizedStatus(lang, 'failed')}</option>
+                  <option value="reversed">{localizedStatus(lang, 'reversed')}</option>
                 </select>
               </div>
             </div>
@@ -2237,7 +2321,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               defaultSortField="id"
               defaultSortDir="desc"
               lang={lang}
-              searchPlaceholder={lang === 'ar' ? 'بحث سريع في سجل العمليات والنزاعات...' : 'Fast search recharge ledger & disputes...'}
+              searchPlaceholder={localizedText(lang, 'بحث سريع في سجل العمليات والنزاعات...', 'Fast search recharge ledger & disputes...')}
             />
           </div>
         )}
@@ -2251,7 +2335,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   {t.navTopups}
                 </h2>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {lang === 'ar' ? 'طلبات شحن الأرصدة المقدمة من الموزعين (تحصيل نقدي، بريدي موب، أو CCP)' : 'Dealer wallet balance requests requiring administrative confirmation.'}
+                  {localizedText(lang, 'طلبات شحن الأرصدة المقدمة من الموزعين (تحصيل نقدي، بريدي موب، أو CCP)', 'Dealer wallet balance requests requiring administrative confirmation.')}
                 </span>
               </div>
             </div>
@@ -2265,7 +2349,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               defaultSortField="id"
               defaultSortDir="desc"
               lang={lang}
-              searchPlaceholder={lang === 'ar' ? 'بحث في طلبات الشحن (الموزع، المرجع، المبلغ)...' : 'Search top-up requests (dealer, ref, amount)...'}
+              searchPlaceholder={localizedText(lang, 'بحث في طلبات الشحن (الموزع، المرجع، المبلغ)...', 'Search top-up requests (dealer, ref, amount)...')}
             />
           </div>
         )}
@@ -2279,7 +2363,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 {t.navCommissions}
               </h2>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {lang === 'ar' ? 'تحديد نسب العمولة المقتطعة تلقائياً للموزعين عند كل شحن (مثال: 5% تخصم 95 د.ج فقط من محفظة الموزع)' : 'Configure operator discount commissions and low-balance warning triggers.'}
+                {localizedText(lang, 'تحديد نسب العمولة المقتطعة تلقائياً للموزعين عند كل شحن (مثال: 5% تخصم 95 د.ج فقط من محفظة الموزع)', 'Configure operator discount commissions and low-balance warning triggers.')}
               </span>
             </div>
 
@@ -2299,7 +2383,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                        {lang === 'ar' ? 'نسبة العمولة المقتطعة (%)' : 'Default Commission (%)'}
+                        {localizedText(lang, 'نسبة العمولة المقتطعة (%)', 'Default Commission (%)')}
                       </label>
                       <input
                         type="number"
@@ -2312,13 +2396,15 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
                         {lang === 'ar' 
                           ? `شحن 100 د.ج يخصم ${100 - (100 * op.default_commission_pct / 100)} د.ج فقط من رصيد المحل`
-                          : `100 DZD recharge deducts ${100 - (100 * op.default_commission_pct / 100)} DZD net from wallet`}
+                          : lang === 'fr'
+                            ? `Une recharge de 100 DZD débite ${100 - (100 * op.default_commission_pct / 100)} DZD net du portefeuille`
+                            : `100 DZD recharge deducts ${100 - (100 * op.default_commission_pct / 100)} DZD net from wallet`}
                       </span>
                     </div>
 
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                        {lang === 'ar' ? 'حد تنبيه الرصيد المنخفض (د.ج)' : 'Low Balance Alert Threshold'}
+                        {localizedText(lang, 'حد تنبيه الرصيد المنخفض (د.ج)', 'Low Balance Alert Threshold')}
                       </label>
                       <input
                         type="number"
@@ -2331,11 +2417,11 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
 
                     <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-subtle)', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'الرصيد المشترى بالجملة:' : 'Wholesale Available:'}</span>
-                        <strong style={{ fontFamily: 'monospace' }}>{parseFloat(op.balance).toLocaleString()} {currencyLabel}</strong>
+                        <span style={{ color: 'var(--text-secondary)' }}>{localizedText(lang, 'الرصيد المشترى بالجملة:', 'Wholesale Available:')}</span>
+                        <strong style={{ fontFamily: 'monospace' }}>{parseFloat(op.balance).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</strong>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'البوادئ المعتمدة:' : 'Active Prefixes:'}</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{localizedText(lang, 'البوادئ المعتمدة:', 'Active Prefixes:')}</span>
                         <strong style={{ color: 'var(--algeria-green)', fontFamily: 'monospace' }}>{op.prefixes}</strong>
                       </div>
                     </div>
@@ -2359,7 +2445,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                         boxShadow: '0 4px 10px rgba(0, 135, 68, 0.2)'
                       }}
                     >
-                      {lang === 'ar' ? 'حفظ إعدادات المتعامل' : 'Save Operator Settings'}
+                      {localizedText(lang, 'حفظ إعدادات المتعامل', 'Save Operator Settings')}
                     </button>
                   </div>
                 </div>
@@ -2377,7 +2463,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   {t.navComplaints}
                 </h2>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {lang === 'ar' ? 'مراجعة نزاعات الشحن وإلغاء العملية وإعادة المبلغ إلى محفظة الموزع بعد تأكيد المسؤول' : 'Review recharge disputes and, when needed, reverse a transaction with an admin-confirmed dealer wallet refund.'}
+                  {localizedText(lang, 'مراجعة نزاعات الشحن وإلغاء العملية وإعادة المبلغ إلى محفظة الموزع بعد تأكيد المسؤول', 'Review recharge disputes and, when needed, reverse a transaction with an admin-confirmed dealer wallet refund.')}
                 </span>
               </div>
             </div>
@@ -2391,7 +2477,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               defaultSortField="id"
               defaultSortDir="desc"
               lang={lang}
-              searchPlaceholder={lang === 'ar' ? 'بحث في التذاكر والنزاعات (رقم التذكرة، الموزع، الهاتف)...' : 'Search dispute tickets (ticket ref, dealer, phone)...'}
+              searchPlaceholder={localizedText(lang, 'بحث في التذاكر والنزاعات (رقم التذكرة، الموزع، الهاتف)...', 'Search dispute tickets (ticket ref, dealer, phone)...')}
             />
           </div>
         )}
@@ -2404,10 +2490,58 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               {t.navSettings}
             </h2>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
-              {lang === 'ar' ? 'ضبط المنطقة الزمنية، العملة الرسمية الجزائرية، وصيغة التاريخ والوقت' : 'Configure Algerian timezone, currency DZD, and date formatting.'}
+              {localizedText(lang, 'ضبط المنطقة الزمنية، العملة الرسمية الجزائرية، وصيغة التاريخ والوقت', 'Configure Algerian timezone, currency DZD, and date formatting.')}
             </p>
 
             <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label htmlFor="company-name" style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  {localizedText(lang, 'اسم الشركة', 'Company Name')}
+                </label>
+                <input
+                  id="company-name"
+                  type="text"
+                  maxLength={100}
+                  value={systemSettings.company_name || ''}
+                  onChange={(e) => setSystemSettings(prev => ({ ...prev, company_name: e.target.value }))}
+                  className="filter-input"
+                  style={{ width: '100%', fontSize: '14px' }}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="company-logo" style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  {localizedText(lang, 'شعار الشركة', 'Company Logo')}
+                </label>
+                <input
+                  id="company-logo"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleCompanyLogoChange}
+                  className="filter-input"
+                  style={{ width: '100%', fontSize: '14px' }}
+                />
+                <span style={{ display: 'block', marginTop: '6px', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                  {localizedText(lang, 'اختر صورة للشعار؛ سيتم تصغيرها تلقائياً للحفظ.', 'Choose an image for your logo; it will be resized automatically for storage.')}
+                </span>
+                {systemSettings.company_logo && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px' }}>
+                    <img
+                      src={systemSettings.company_logo}
+                      alt={localizedText(lang, 'معاينة شعار الشركة', 'Company logo preview')}
+                      style={{ width: '64px', height: '64px', objectFit: 'contain', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: '#ffffff' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSystemSettings(prev => ({ ...prev, company_logo: '' }))}
+                      style={{ padding: '8px 12px', border: '1px solid var(--border-subtle)', borderRadius: '8px', background: 'var(--bg-surface)', color: 'var(--text-primary)', cursor: 'pointer' }}
+                    >
+                      {localizedText(lang, 'إزالة الشعار', 'Remove Logo')}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                   {t.timezoneLabel}
@@ -2462,7 +2596,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   style={{ width: '100%', fontSize: '14px', fontFamily: 'monospace' }}
                 />
                 <span style={{ display: 'block', marginTop: '6px', color: 'var(--text-secondary)', fontSize: '12px' }}>
-                  {lang === 'ar' ? 'معاينة:' : 'Preview:'}{' '}
+                  {localizedText(lang, 'معاينة:', 'Preview:')}{' '}
                   <strong style={{ color: 'var(--text-primary)' }}>
                     {formatDateTime('2026-10-30 14:05:09', systemSettings.date_format, lang)}
                   </strong>
@@ -2497,7 +2631,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
         <div className="modal-overlay">
           <div className="modal-card">
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', color: 'var(--text-primary)' }}>
-              {lang === 'ar' ? 'تعديل رصيد محفظة الموزع' : 'Adjust Dealer Wallet Balance'}
+              {localizedText(lang, 'تعديل رصيد محفظة الموزع', 'Adjust Dealer Wallet Balance')}
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
               {balanceModal.dealer?.full_name} ({balanceModal.dealer?.business_name})
@@ -2521,7 +2655,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                     borderColor: balanceModal.type === 'credit' ? 'var(--algeria-green)' : 'var(--border-strong)'
                   }}
                 >
-                  + {lang === 'ar' ? 'إيداع رصيد (شحن)' : 'Credit (Add)'}
+                  + {localizedText(lang, 'إيداع رصيد (شحن)', 'Credit (Add)')}
                 </button>
                 <button
                   type="button"
@@ -2539,13 +2673,13 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                     borderColor: balanceModal.type === 'debit' ? 'var(--algeria-red)' : 'var(--border-strong)'
                   }}
                 >
-                  - {lang === 'ar' ? 'خصم من الرصيد' : 'Debit (Deduct)'}
+                  - {localizedText(lang, 'خصم من الرصيد', 'Debit (Deduct)')}
                 </button>
               </div>
 
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'المبلغ (د.ج)' : 'Amount (DZD)'}
+                  {localizedText(lang, 'المبلغ (د.ج)', 'Amount (DZD)')}
                 </label>
                 <input
                   type="number"
@@ -2560,11 +2694,11 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
 
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'ملاحظة الإدارة' : 'Notes'}
+                  {localizedText(lang, 'ملاحظة الإدارة', 'Notes')}
                 </label>
                 <input
                   type="text"
-                  placeholder={lang === 'ar' ? 'مثال: إيداع نقدي، بريدي موب...' : 'e.g. Cash collection deposit'}
+                  placeholder={localizedText(lang, 'مثال: إيداع نقدي، بريدي موب...', 'e.g. Cash collection deposit')}
                   value={balanceModal.notes}
                   onChange={(e) => setBalanceModal(prev => ({ ...prev, notes: e.target.value }))}
                   className="filter-input"
@@ -2578,13 +2712,13 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   onClick={() => setBalanceModal({ open: false, dealer: null, amount: '', type: 'credit', notes: '' })}
                   style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-primary)', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                  {localizedText(lang, 'إلغاء', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--algeria-green)', color: '#ffffff', fontWeight: '800', cursor: 'pointer' }}
                 >
-                  {lang === 'ar' ? 'تأكيد التعديل' : 'Confirm'}
+                  {localizedText(lang, 'تأكيد التعديل', 'Confirm')}
                 </button>
               </div>
             </form>
@@ -2597,7 +2731,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
         <div className="modal-overlay">
           <div className="modal-card">
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', color: 'var(--text-primary)' }}>
-              {lang === 'ar' ? 'معالجة الشكوى واسترجاع الرصيد' : 'Resolve Dispute & Refund'}
+              {localizedText(lang, 'معالجة الشكوى واسترجاع الرصيد', 'Resolve Dispute & Refund')}
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
               {complaintModal.ticket?.ticket_ref} - {complaintModal.ticket?.phone_number}
@@ -2606,7 +2740,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             <form onSubmit={handleResolveTicket} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'قرار المعالجة' : 'Resolution Decision'}
+                  {localizedText(lang, 'قرار المعالجة', 'Resolution Decision')}
                 </label>
                 <select
                   value={complaintModal.status}
@@ -2622,16 +2756,16 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                     value="resolved_refunded"
                     disabled={!complaintModal.ticket?.recharge_id || complaintModal.ticket?.recharge_status === 'reversed' || Number(complaintModal.ticket?.net_debited) <= 0}
                   >
-                    {lang === 'ar' ? 'استرجاع الرصيد للمحفظة فوراً (إلغاء العملية)' : 'Refund to Dealer Wallet'}
+                    {localizedText(lang, 'استرجاع الرصيد للمحفظة فوراً (إلغاء العملية)', 'Refund to Dealer Wallet')}
                   </option>
-                  <option value="resolved_confirmed">{lang === 'ar' ? 'تأكيد وصول الرصيد للزبون' : 'Confirmed Delivered by Operator'}</option>
-                  <option value="rejected">{lang === 'ar' ? 'رفض الشكوى' : 'Reject Dispute'}</option>
+                  <option value="resolved_confirmed">{localizedText(lang, 'تأكيد وصول الرصيد للزبون', 'Confirmed Delivered by Operator')}</option>
+                  <option value="rejected">{localizedText(lang, 'رفض الشكوى', 'Reject Dispute')}</option>
                 </select>
               </div>
 
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'رد الإدارة على الموزع' : 'Admin Response Note'}
+                  {localizedText(lang, 'رد الإدارة على الموزع', 'Admin Response Note')}
                 </label>
                 <textarea
                   rows="3"
@@ -2649,7 +2783,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   onClick={() => setComplaintModal({ open: false, ticket: null, status: 'resolved_confirmed', response: '', refund: false })}
                   style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-primary)', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                  {localizedText(lang, 'إلغاء', 'Cancel')}
                 </button>
                 <button
                   type="submit"
@@ -2657,8 +2791,8 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--algeria-green)', color: '#ffffff', fontWeight: '800', cursor: complaintSubmitting ? 'not-allowed' : 'pointer', opacity: complaintSubmitting ? 0.6 : 1 }}
                 >
                   {complaintSubmitting
-                    ? (lang === 'ar' ? 'جارٍ التنفيذ...' : 'Processing...')
-                    : (lang === 'ar' ? 'تطبيق القرار' : 'Apply')}
+                    ? (localizedText(lang, 'جارٍ التنفيذ...', 'Processing...'))
+                    : (localizedText(lang, 'تطبيق القرار', 'Apply'))}
                 </button>
               </div>
             </form>
@@ -2670,15 +2804,17 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
         <div className="modal-overlay">
           <div className="modal-card">
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '6px', color: 'var(--text-primary)' }}>
-              {lang === 'ar' ? 'عكس استرجاع الرصيد' : 'Undo Wallet Refund'}
+              {localizedText(lang, 'عكس استرجاع الرصيد', 'Undo Wallet Refund')}
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
               {undoRefundModal.ticket?.ticket_ref} - {undoRefundModal.ticket?.dealer_name}
             </p>
             <p style={{ fontSize: '13px', marginBottom: '12px' }}>
               {lang === 'ar'
-                ? `سيتم خصم ${Number(undoRefundModal.ticket?.net_debited || 0).toLocaleString()} ${currencyLabel} من محفظة الموزع. ستبقى عملية الشحن معكوسة، وستعود الشكوى إلى قيد التحقيق.`
-                : `${Number(undoRefundModal.ticket?.net_debited || 0).toLocaleString()} ${currencyLabel} will be debited from the dealer wallet. The recharge stays reversed and the dispute returns to Investigating.`}
+                ? `سيتم خصم ${Number(undoRefundModal.ticket?.net_debited || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} ${currencyLabel} من محفظة الموزع. ستبقى عملية الشحن معكوسة، وستعود الشكوى إلى قيد التحقيق.`
+                : lang === 'fr'
+                  ? `${Number(undoRefundModal.ticket?.net_debited || 0).toLocaleString('fr-FR')} ${currencyLabel} seront débités du portefeuille du revendeur. La recharge reste annulée et le litige repasse en cours d’examen.`
+                  : `${Number(undoRefundModal.ticket?.net_debited || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} ${currencyLabel} will be debited from the dealer wallet. The recharge stays reversed and the dispute returns to Investigating.`}
             </p>
             <form onSubmit={handleUndoComplaintRefund} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
@@ -2687,7 +2823,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   checked={undoRefundModal.confirmed}
                   onChange={(e) => setUndoRefundModal(prev => ({ ...prev, confirmed: e.target.checked }))}
                 />
-                <span>{lang === 'ar' ? 'أؤكد خصم مبلغ الاسترجاع وإعادة فتح النزاع.' : 'I confirm debiting the refund and reopening this dispute.'}</span>
+                <span>{localizedText(lang, 'أؤكد خصم مبلغ الاسترجاع وإعادة فتح النزاع.', 'I confirm debiting the refund and reopening this dispute.')}</span>
               </label>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
@@ -2695,14 +2831,14 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   onClick={() => setUndoRefundModal({ open: false, ticket: null, confirmed: false })}
                   style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-primary)', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                  {localizedText(lang, 'إلغاء', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={undoRefundSubmitting || !undoRefundModal.confirmed}
                   style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--algeria-green)', color: '#ffffff', fontWeight: '800', cursor: undoRefundSubmitting || !undoRefundModal.confirmed ? 'not-allowed' : 'pointer', opacity: undoRefundSubmitting || !undoRefundModal.confirmed ? 0.6 : 1 }}
                 >
-                  {undoRefundSubmitting ? (lang === 'ar' ? 'جارٍ التنفيذ...' : 'Processing...') : (lang === 'ar' ? 'تأكيد عكس الاسترجاع' : 'Confirm Undo Refund')}
+                  {undoRefundSubmitting ? (localizedText(lang, 'جارٍ التنفيذ...', 'Processing...')) : (localizedText(lang, 'تأكيد عكس الاسترجاع', 'Confirm Undo Refund'))}
                 </button>
               </div>
             </form>
@@ -2729,10 +2865,10 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               </div>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: 'var(--text-primary)' }}>
-                  {lang === 'ar' ? 'تسجيل نزاع لعملية شحن (Book Dispute)' : 'Book Transaction Dispute'}
+                  {localizedText(lang, 'تسجيل نزاع لعملية شحن (Book Dispute)', 'Book Transaction Dispute')}
                 </h3>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {lang === 'ar' ? 'الحالة المبدئية للنزاع: قيد التحقيق (Investigating)' : 'Initial Status will be set to: Investigating'}
+                  {localizedText(lang, 'الحالة المبدئية للنزاع: قيد التحقيق (Investigating)', 'Initial Status will be set to: Investigating')}
                 </span>
               </div>
             </div>
@@ -2750,20 +2886,20 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 fontSize: '12.5px'
               }}>
                 <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>{lang === 'ar' ? 'مرجع الشحن' : 'Ref'}:</span>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>{localizedText(lang, 'مرجع الشحن', 'Ref')}:</span>
                   <strong style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{disputeModal.recharge.recharge_ref}</strong>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>{lang === 'ar' ? 'رقم الزبون' : 'Phone'}:</span>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>{localizedText(lang, 'رقم الزبون', 'Phone')}:</span>
                   <strong style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{disputeModal.recharge.phone_number}</strong>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>{lang === 'ar' ? 'الموزع' : 'Dealer'}:</span>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>{localizedText(lang, 'الموزع', 'Dealer')}:</span>
                   <strong>{disputeModal.recharge.dealer_name}</strong>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>{lang === 'ar' ? 'القيمة والمخصوم' : 'Amount'}:</span>
-                  <strong style={{ color: 'var(--algeria-green)' }}>{parseFloat(disputeModal.recharge.face_value).toLocaleString()} {currencyLabel}</strong>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px' }}>{localizedText(lang, 'القيمة والمخصوم', 'Amount')}:</span>
+                  <strong style={{ color: 'var(--algeria-green)' }}>{parseFloat(disputeModal.recharge.face_value).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</strong>
                 </div>
               </div>
             )}
@@ -2771,7 +2907,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             <form onSubmit={handleConfirmBookDispute} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'حالة التذكرة (Status)' : 'Ticket Status'}
+                  {localizedText(lang, 'حالة التذكرة (Status)', 'Ticket Status')}
                 </label>
                 <div style={{
                   display: 'flex',
@@ -2786,13 +2922,13 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   fontSize: '13px'
                 }}>
                   <Clock style={{ width: '16px', height: '16px' }} />
-                  <span>{lang === 'ar' ? 'قيد التحقيق الفني مع المتعامل (Investigating)' : 'Investigating (Forwarded to NOC)'}</span>
+                  <span>{localizedText(lang, 'قيد التحقيق الفني مع المتعامل (Investigating)', 'Investigating (Forwarded to NOC)')}</span>
                 </div>
               </div>
 
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'موضوع النزاع' : 'Dispute Subject'}
+                  {localizedText(lang, 'موضوع النزاع', 'Dispute Subject')}
                 </label>
                 <input
                   type="text"
@@ -2806,7 +2942,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
 
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'تفاصيل النزاع والملاحظة الفنية' : 'Dispute Details & Technical Notes'}
+                  {localizedText(lang, 'تفاصيل النزاع والملاحظة الفنية', 'Dispute Details & Technical Notes')}
                 </label>
                 <textarea
                   rows="3"
@@ -2824,14 +2960,14 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   onClick={() => setDisputeModal({ open: false, recharge: null, subject: '', description: '', status: 'investigating' })}
                   style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-primary)', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                  {localizedText(lang, 'إلغاء', 'Cancel')}
                 </button>
                 <button
                   type="submit"
                   style={{ flex: 1.5, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: 'var(--algeria-red)', color: '#ffffff', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                   <AlertTriangle style={{ width: '16px', height: '16px' }} />
-                  <span>{lang === 'ar' ? 'تأكيد النزاع والذهاب للسجل' : 'Confirm Dispute & View Tickets'}</span>
+                  <span>{localizedText(lang, 'تأكيد النزاع والذهاب للسجل', 'Confirm Dispute & View Tickets')}</span>
                 </button>
               </div>
             </form>
@@ -2844,18 +2980,18 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
           <div className="modal-card" style={{ maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginBottom: '4px', color: 'var(--text-primary)' }}>
               {providerAdjustmentModal.type === 'credit'
-                ? (lang === 'ar' ? 'إضافة رصيد للمتعامل' : `Add Balance to ${providerAdjustmentModal.operator?.name}`)
-                : (lang === 'ar' ? 'خصم رصيد من المتعامل' : `Debit Balance from ${providerAdjustmentModal.operator?.name}`)}
+                ? (lang === 'ar' ? 'إضافة رصيد للمتعامل' : lang === 'fr' ? `Créditer le solde de ${providerAdjustmentModal.operator?.name}` : `Add Balance to ${providerAdjustmentModal.operator?.name}`)
+                : (lang === 'ar' ? 'خصم رصيد من المتعامل' : lang === 'fr' ? `Débiter le solde de ${providerAdjustmentModal.operator?.name}` : `Debit Balance from ${providerAdjustmentModal.operator?.name}`)}
             </h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-              {lang === 'ar' ? 'الرصيد الحالي:' : 'Current balance:'}{' '}
-              <strong>{parseFloat(providerAdjustmentModal.operator?.balance || 0).toLocaleString()} {currencyLabel}</strong>
+              {localizedText(lang, 'الرصيد الحالي:', 'Current balance:')}{' '}
+              <strong>{parseFloat(providerAdjustmentModal.operator?.balance || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</strong>
             </p>
 
             <form onSubmit={handleAdjustOperatorBalance} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'المبلغ (د.ج)' : 'Amount (DZD)'}
+                  {localizedText(lang, 'المبلغ (د.ج)', 'Amount (DZD)')}
                 </label>
                 <input
                   type="number"
@@ -2872,7 +3008,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
 
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                  {lang === 'ar' ? 'وصف العملية (إلزامي)' : 'Transaction description (required)'}
+                  {localizedText(lang, 'وصف العملية (إلزامي)', 'Transaction description (required)')}
                 </label>
                 <textarea
                   rows="3"
@@ -2880,7 +3016,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   maxLength="2000"
                   value={providerAdjustmentModal.description}
                   onChange={(e) => setProviderAdjustmentModal(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder={lang === 'ar' ? 'مثال: شحن رصيد من المورد، تسوية...' : 'e.g. Provider payment, balance correction...'}
+                  placeholder={localizedText(lang, 'مثال: شحن رصيد من المورد، تسوية...', 'e.g. Provider payment, balance correction...')}
                   className="filter-input"
                   style={{ width: '100%', resize: 'vertical' }}
                 />
@@ -2893,7 +3029,7 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   onClick={() => setProviderAdjustmentModal({ open: false, operator: null, amount: '', type: 'credit', description: '' })}
                   style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-primary)', fontWeight: '700', cursor: 'pointer' }}
                 >
-                  {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                  {localizedText(lang, 'إلغاء', 'Cancel')}
                 </button>
                 <button
                   type="submit"
@@ -2911,8 +3047,8 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                   }}
                 >
                   {providerAdjustmentSubmitting
-                    ? (lang === 'ar' ? 'جارٍ الحفظ...' : 'Saving...')
-                    : (lang === 'ar' ? 'تأكيد وحفظ في السجل' : 'Submit & Record in Ledger')}
+                    ? (localizedText(lang, 'جارٍ الحفظ...', 'Saving...'))
+                    : (localizedText(lang, 'تأكيد وحفظ في السجل', 'Submit & Record in Ledger'))}
                 </button>
               </div>
             </form>
@@ -2930,16 +3066,16 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)' }}>
-                  {lang === 'ar' ? 'سجل حركات رصيد' : 'Provider Balance Ledger'}{' '}
+                  {localizedText(lang, 'سجل حركات رصيد', 'Provider Balance Ledger')}{' '}
                   {lang === 'ar' ? providerLedgerModal.operator?.name_ar : providerLedgerModal.operator?.name}
                 </h3>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  {lang === 'ar' ? 'يشمل الإضافات والخصومات وحركات الشحن.' : 'Credits, debits, and recharge balance movements.'}
+                  {localizedText(lang, 'يشمل الإضافات والخصومات وحركات الشحن.', 'Credits, debits, and recharge balance movements.')}
                 </p>
               </div>
               <button
                 type="button"
-                aria-label={lang === 'ar' ? 'إغلاق' : 'Close'}
+                aria-label={localizedText(lang, 'إغلاق', 'Close')}
                 onClick={() => setProviderLedgerModal({ open: false, operator: null, transactions: [], loading: false })}
                 style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}
               >
@@ -2951,32 +3087,32 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '680px', fontSize: '12px' }}>
                 <thead>
                   <tr style={{ background: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-                    {[lang === 'ar' ? 'التاريخ' : 'Date', lang === 'ar' ? 'النوع' : 'Type', lang === 'ar' ? 'المبلغ' : 'Amount', lang === 'ar' ? 'الرصيد قبل' : 'Before', lang === 'ar' ? 'الرصيد بعد' : 'After', lang === 'ar' ? 'الوصف' : 'Description'].map((heading) => (
+                    {[localizedText(lang, 'التاريخ', 'Date'), localizedText(lang, 'النوع', 'Type'), localizedText(lang, 'المبلغ', 'Amount'), localizedText(lang, 'الرصيد قبل', 'Before'), localizedText(lang, 'الرصيد بعد', 'After'), localizedText(lang, 'الوصف', 'Description')].map((heading) => (
                       <th key={heading} style={{ padding: '10px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)', whiteSpace: 'nowrap' }}>{heading}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {providerLedgerModal.loading ? (
-                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'جارٍ تحميل السجل...' : 'Loading ledger...'}</td></tr>
+                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>{localizedText(lang, 'جارٍ تحميل السجل...', 'Loading ledger...')}</td></tr>
                   ) : providerLedgerModal.transactions.length === 0 ? (
-                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>{lang === 'ar' ? 'لا توجد حركات مسجلة بعد.' : 'No provider transactions recorded yet.'}</td></tr>
+                    <tr><td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>{localizedText(lang, 'لا توجد حركات مسجلة بعد.', 'No provider transactions recorded yet.')}</td></tr>
                   ) : providerLedgerModal.transactions.map((transaction) => {
                     const isCredit = transaction.type === 'credit';
                     const typeLabel = isCredit
-                      ? (lang === 'ar' ? 'إضافة' : 'Credit')
+                      ? (localizedText(lang, 'إضافة', 'Credit'))
                       : transaction.type === 'debit'
-                        ? (lang === 'ar' ? 'خصم' : 'Debit')
-                        : (lang === 'ar' ? 'خصم شحن' : 'Recharge');
+                        ? (localizedText(lang, 'خصم', 'Debit'))
+                        : (localizedText(lang, 'خصم شحن', 'Recharge'));
                     return (
                       <tr key={transaction.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                         <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
                           {formatDateTime(transaction.created_at, systemSettings.date_format, lang)}
                         </td>
                         <td style={{ padding: '10px', color: isCredit ? 'var(--algeria-green)' : 'var(--algeria-red)', fontWeight: '800', whiteSpace: 'nowrap' }}>{typeLabel}</td>
-                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.amount).toLocaleString()} {currencyLabel}</td>
-                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_before).toLocaleString()}</td>
-                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_after).toLocaleString()}</td>
+                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.amount).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</td>
+                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_before).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')}</td>
+                        <td style={{ padding: '10px', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{parseFloat(transaction.balance_after).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')}</td>
                         <td style={{ padding: '10px', minWidth: '200px' }}>
                           <div>{transaction.description}</div>
                           <small style={{ color: 'var(--text-muted)' }}>{transaction.transaction_ref}</small>
@@ -3001,28 +3137,28 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)' }}>
-                  {lang === 'ar' ? 'السجل المالي للموزع / المحل' : 'Dealer & Store Wallet Ledger'}
+                  {localizedText(lang, 'السجل المالي للموزع / المحل', 'Dealer & Store Wallet Ledger')}
                 </h3>
                 <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                   <strong>{dealerLedgerModal.dealer?.full_name}</strong>
                   {dealerLedgerModal.dealer?.business_name ? ` · ${dealerLedgerModal.dealer.business_name}` : ''}
                 </p>
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  {lang === 'ar' ? 'الرصيد الحالي:' : 'Current wallet balance:'}{' '}
+                  {localizedText(lang, 'الرصيد الحالي:', 'Current wallet balance:')}{' '}
                   <strong style={{ color: 'var(--algeria-green)' }}>
-                    {parseFloat(dealerLedgerModal.dealer?.wallet_balance || 0).toLocaleString()} {currencyLabel}
+                    {parseFloat(dealerLedgerModal.dealer?.wallet_balance || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
                   </strong>
                   {' · '}
-                  {lang === 'ar' ? 'السقف الائتماني:' : 'Credit limit:'}{' '}
-                  <strong>{parseFloat(dealerLedgerModal.dealer?.credit_limit || 0).toLocaleString()} {currencyLabel}</strong>
+                  {localizedText(lang, 'السقف الائتماني:', 'Credit limit:')}{' '}
+                  <strong>{parseFloat(dealerLedgerModal.dealer?.credit_limit || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</strong>
                   {' · '}
-                  {lang === 'ar' ? 'الدين المستحق:' : 'Outstanding debt:'}{' '}
-                  <strong style={{ color: 'var(--algeria-red)' }}>{parseFloat(dealerLedgerModal.dealer?.outstanding_debt || 0).toLocaleString()} {currencyLabel}</strong>
+                  {localizedText(lang, 'الدين المستحق:', 'Outstanding debt:')}{' '}
+                  <strong style={{ color: 'var(--algeria-red)' }}>{parseFloat(dealerLedgerModal.dealer?.outstanding_debt || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</strong>
                 </p>
               </div>
               <button
                 type="button"
-                aria-label={lang === 'ar' ? 'إغلاق' : 'Close'}
+                aria-label={localizedText(lang, 'إغلاق', 'Close')}
                 onClick={() => setDealerLedgerModal({ open: false, dealer: null, transactions: [], loading: false })}
                 style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}
               >
@@ -3040,11 +3176,11 @@ export default function AdminPortal({ t, lang, theme, onOpenQrModal, currentUser
                 defaultSortField="id"
                 defaultSortDir="desc"
                 lang={lang}
-                searchPlaceholder={lang === 'ar' ? 'بحث في سجل المحفظة...' : 'Search wallet ledger...'}
+                searchPlaceholder={localizedText(lang, 'بحث في سجل المحفظة...', 'Search wallet ledger...')}
                 emptyMessage={
                   dealerLedgerModal.loading
-                    ? (lang === 'ar' ? 'جارٍ تحميل السجل...' : 'Loading ledger...')
-                    : (lang === 'ar' ? 'لا توجد حركات مسجلة لهذا المحل.' : 'No wallet transactions recorded for this store.')
+                    ? (localizedText(lang, 'جارٍ تحميل السجل...', 'Loading ledger...'))
+                    : (localizedText(lang, 'لا توجد حركات مسجلة لهذا المحل.', 'No wallet transactions recorded for this store.'))
                 }
               />
             </div>

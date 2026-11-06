@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { localizedStatus, localizedText } from '../i18n';
 import { 
   Smartphone, Zap, Droplet, Bus, Wifi, ShieldCheck, CheckCircle2,
   Clock, AlertCircle, ArrowUpRight, Plus, RefreshCw, Send, Share2,
@@ -6,6 +7,8 @@ import {
   TrendingUp, Sparkles, MessageSquare, Terminal, MonitorCheck, Receipt
 } from 'lucide-react';
 import { api } from '../api';
+import LanguageSelector from './LanguageSelector';
+import CompanyLogo from './CompanyLogo';
 
 const DEALER_SESSION_KEY = 'razik_dealer_auth_session';
 
@@ -29,7 +32,7 @@ function readDealerSession() {
   }
 }
 
-export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onOpenQrModal, isDirectMobile }) {
+export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onOpenQrModal, isDirectMobile, companyName, companyLogo }) {
   const [authSession, setAuthSession] = useState(readDealerSession);
   const [currentScreen, setCurrentScreenState] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -116,7 +119,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
       const result = await api.login(loginCredentials);
       if (!result.success) throw new Error(result.error || 'Sign in failed.');
       if (result.user?.role !== 'dealer') {
-        throw new Error(lang === 'ar' ? 'هذا الدخول مخصص لحسابات المحلات فقط.' : 'This sign-in is for dealer/shopkeeper accounts only.');
+        throw new Error(localizedText(lang, 'هذا الدخول مخصص لحسابات المحلات فقط.', 'This sign-in is for dealer/shopkeeper accounts only.'));
       }
       const session = { token: result.token, user: result.user };
       localStorage.setItem(DEALER_SESSION_KEY, JSON.stringify(session));
@@ -148,11 +151,11 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
     event.preventDefault();
     setPasswordError('');
     if (passwordFields.new_password.length < 8) {
-      setPasswordError(lang === 'ar' ? 'يجب أن تتكون كلمة المرور الجديدة من 8 أحرف على الأقل.' : 'New password must be at least 8 characters.');
+      setPasswordError(localizedText(lang, 'يجب أن تتكون كلمة المرور الجديدة من 8 أحرف على الأقل.', 'New password must be at least 8 characters.'));
       return;
     }
     if (passwordFields.new_password !== passwordFields.confirm_password) {
-      setPasswordError(lang === 'ar' ? 'كلمتا المرور الجديدتان غير متطابقتين.' : 'New passwords do not match.');
+      setPasswordError(localizedText(lang, 'كلمتا المرور الجديدتان غير متطابقتين.', 'New passwords do not match.'));
       return;
     }
     setAuthBusy(true);
@@ -164,7 +167,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
       if (!result.success) throw new Error(result.error || 'Could not change password.');
       setPasswordModalOpen(false);
       setPasswordFields({ current_password: '', new_password: '', confirm_password: '' });
-      notify(lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح.' : 'Password changed successfully.');
+      notify(localizedText(lang, 'تم تغيير كلمة المرور بنجاح.', 'Password changed successfully.'));
     } catch (error) {
       setPasswordError(error.message);
     } finally {
@@ -233,16 +236,23 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
   const handleRechargeSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!detectedOp) {
-      notify(lang === 'ar' ? 'الرجاء إدخال رقم هاتف جزائري صالح (موبيليس 06، جازي 07، أوريدو 05)' : 'Please enter a valid Algerian phone number', true);
+      notify(localizedText(lang, 'الرجاء إدخال رقم هاتف جزائري صالح (موبيليس 06، جازي 07، أوريدو 05)', 'Please enter a valid Algerian phone number'), true);
       return;
     }
     if (faceVal <= 0) {
-      notify(lang === 'ar' ? 'الرجاء تحديد مبلغ شحن صالح' : 'Please enter a valid amount', true);
+      notify(localizedText(lang, 'الرجاء تحديد مبلغ شحن صالح', 'Please enter a valid amount'), true);
       return;
     }
 
     if (netDebited > (parseFloat(dealer.wallet_balance) + parseFloat(dealer.credit_limit))) {
-      notify(lang === 'ar' ? `رصيدك غير كافٍ! المطلوب بعد خصم العمولة: ${netDebited} د.ج` : `Insufficient balance! Required: ${netDebited} DZD`, true);
+      notify(
+        lang === 'ar'
+          ? `رصيدك غير كافٍ! المطلوب بعد خصم العمولة: ${netDebited} د.ج`
+          : lang === 'fr'
+            ? `Solde insuffisant ! Montant requis : ${netDebited} DZD`
+            : `Insufficient balance! Required: ${netDebited} DZD`,
+        true
+      );
       return;
     }
 
@@ -259,7 +269,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
 
       if (res.success) {
         setLastReceipt(res.data);
-        notify(lang === 'ar' ? 'تمت عملية الشحن بنجاح!' : 'Recharge successful!');
+        notify(localizedText(lang, 'تمت عملية الشحن بنجاح!', 'Recharge successful!'));
         setPhoneInput('');
         refreshData();
       } else {
@@ -287,7 +297,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
     });
 
     if (res.success) {
-      notify(lang === 'ar' ? 'تم إرسال طلب شحن المحفظة للإدارة بنجاح!' : 'Top-up request sent to admin!');
+      notify(localizedText(lang, 'تم إرسال طلب شحن المحفظة للإدارة بنجاح!', 'Top-up request sent to admin!'));
       setTopupAmount('');
       setTopupProof('');
       setCurrentScreen('home');
@@ -311,7 +321,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
     });
 
     if (res.success) {
-      notify(lang === 'ar' ? 'تم تسجيل الشكوى بنجاح وسيتم التحقق منها فوراً' : 'Dispute booked successfully!');
+      notify(localizedText(lang, 'تم تسجيل الشكوى بنجاح وسيتم التحقق منها فوراً', 'Dispute booked successfully!'));
       setComplaintModal({ open: false, recharge: null, desc: '' });
       refreshData();
     } else {
@@ -319,7 +329,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
     }
   };
 
-  const currencyLabel = lang === 'ar' ? 'د.ج' : 'DZD';
+  const currencyLabel = localizedText(lang, 'د.ج', 'DZD');
 
   if (!authSession || !dealer) {
     return (
@@ -343,14 +353,17 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
           boxShadow: '0 12px 32px rgba(15,23,42,.1)'
         }}>
           <div style={{ marginBottom: '20px' }}>
-            <strong style={{ display: 'block', fontSize: '22px', color: 'var(--algeria-green)' }}>Razik Telecom</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+              <CompanyLogo logo={companyLogo} size={52} />
+              <strong style={{ display: 'block', fontSize: '22px', color: 'var(--algeria-green)' }}>{companyName || t.appName}</strong>
+            </div>
             <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-              {lang === 'ar' ? 'تسجيل دخول المحل ونقطة البيع' : 'Shopkeeper POS Sign In'}
+              {localizedText(lang, 'تسجيل دخول المحل ونقطة البيع', 'Shopkeeper POS Sign In')}
             </span>
           </div>
           {loginError && <p role="alert" style={{ padding: '10px 12px', borderRadius: '10px', background: '#fee2e2', color: '#991b1b', fontSize: '13px', fontWeight: 700 }}>{loginError}</p>}
           <label style={{ display: 'block', marginBottom: '14px', fontSize: '13px', fontWeight: 700 }}>
-            {lang === 'ar' ? 'اسم المستخدم أو الهاتف' : 'Username or phone'}
+            {localizedText(lang, 'اسم المستخدم أو الهاتف', 'Username or phone')}
             <input
               required
               autoComplete="username"
@@ -360,7 +373,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
             />
           </label>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 700 }}>
-            {lang === 'ar' ? 'كلمة المرور' : 'Password'}
+            {localizedText(lang, 'كلمة المرور', 'Password')}
             <input
               required
               type="password"
@@ -371,11 +384,13 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
             />
           </label>
           <button type="submit" disabled={authBusy} style={{ width: '100%', marginTop: '18px', padding: '13px', border: 0, borderRadius: '11px', background: 'var(--algeria-green)', color: '#fff', fontSize: '15px', fontWeight: 800, cursor: authBusy ? 'wait' : 'pointer' }}>
-            {authBusy ? '…' : (lang === 'ar' ? 'تسجيل الدخول' : 'Sign In')}
+            {authBusy ? '…' : (localizedText(lang, 'تسجيل الدخول', 'Sign In'))}
           </button>
-          <button type="button" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} style={{ width: '100%', marginTop: '10px', padding: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-            {lang === 'ar' ? 'English' : 'العربية'}
-          </button>
+          <LanguageSelector
+            lang={lang}
+            setLang={setLang}
+            style={{ width: '100%', marginTop: '10px', padding: '10px' }}
+          />
         </form>
       </div>
     );
@@ -419,7 +434,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
               <button
                 id="btn-open-mobile-qr"
                 onClick={onOpenQrModal}
-                title={lang === 'ar' ? 'انقر لمسح رمز QR والفتح على هاتفك الذكي' : 'Click to scan QR code and open on smartphone'}
+                title={localizedText(lang, 'انقر لمسح رمز QR والفتح على هاتفك الذكي', 'Click to scan QR code and open on smartphone')}
                 style={{
                   fontSize: '13px',
                   fontWeight: '800',
@@ -436,7 +451,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                   transition: 'all 0.2s ease'
                 }}
               >
-                <span>{lang === 'ar' ? '📱 محاكي تطبيق الأندرويد للموزعين' : '📱 Android Dealer Mobile Application'}</span>
+                <span>{localizedText(lang, '📱 محاكي تطبيق الأندرويد للموزعين', '📱 Android Dealer Mobile Application')}</span>
                 <span style={{
                   backgroundColor: '#f59e0b',
                   color: '#0f172a',
@@ -445,7 +460,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                   fontSize: '11px',
                   fontWeight: '900'
                 }}>
-                  {lang === 'ar' ? 'مسح QR للهاتف 📷' : 'Scan Phone QR 📷'}
+                  {localizedText(lang, 'مسح QR للهاتف 📷', 'Scan Phone QR 📷')}
                 </span>
               </button>
             </div>
@@ -491,16 +506,22 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                 boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontWeight: '800', fontSize: '15px' }}>{lang === 'ar' ? 'رازيق تليكوم' : 'Razik Telecom'}</span>
+                  <span style={{ fontWeight: '800', fontSize: '15px' }}>{companyName || t.appName}</span>
                   <span style={{ fontSize: '10px', backgroundColor: '#d21034', color: '#fff', padding: '1px 6px', borderRadius: '4px', fontWeight: '800' }}>POS</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button
-                    onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
-                    style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
-                  >
-                    {lang === 'ar' ? 'EN' : 'عربي'}
-                  </button>
+                  <LanguageSelector
+                    lang={lang}
+                    setLang={setLang}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      background: 'rgba(255,255,255,0.2)',
+                      border: '1px solid rgba(255,255,255,0.5)',
+                      color: '#fff'
+                    }}
+                  />
                   <button
                     onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                     style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}
@@ -513,7 +534,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                       onClick={() => setAccountMenuOpen((open) => !open)}
                       style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '5px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
                     >
-                      {lang === 'ar' ? 'حسابي' : 'Account'}
+                      {localizedText(lang, 'حسابي', 'Account')}
                     </button>
                     {accountMenuOpen && (
                       <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 50, width: '190px', padding: '6px', borderRadius: '12px', background: 'var(--bg-surface)', boxShadow: '0 8px 24px rgba(0,0,0,.2)', border: '1px solid var(--border-subtle)' }}>
@@ -522,14 +543,14 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                           onClick={() => { setPasswordError(''); setPasswordFields({ current_password: '', new_password: '', confirm_password: '' }); setPasswordModalOpen(true); setAccountMenuOpen(false); }}
                           style={{ display: 'block', width: '100%', padding: '10px', textAlign: 'start', border: 0, borderRadius: '8px', background: 'transparent', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
                         >
-                          {lang === 'ar' ? 'تغيير كلمة المرور' : 'Change password'}
+                          {localizedText(lang, 'تغيير كلمة المرور', 'Change password')}
                         </button>
                         <button
                           type="button"
                           onClick={handleDealerLogout}
                           style={{ display: 'block', width: '100%', padding: '10px', textAlign: 'start', border: 0, borderRadius: '8px', background: 'transparent', color: '#d21034', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
                         >
-                          {lang === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+                          {localizedText(lang, 'تسجيل الخروج', 'Log out')}
                         </button>
                       </div>
                     )}
@@ -545,11 +566,11 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                   onClick={(event) => event.stopPropagation()}
                   style={{ width: '100%', maxWidth: '400px', padding: '20px', borderRadius: '18px', background: 'var(--bg-surface)', color: 'var(--text-primary)', boxShadow: '0 20px 50px rgba(0,0,0,.3)' }}
                 >
-                  <h2 style={{ margin: '0 0 16px', fontSize: '19px' }}>{lang === 'ar' ? 'تغيير كلمة المرور' : 'Change password'}</h2>
+                  <h2 style={{ margin: '0 0 16px', fontSize: '19px' }}>{localizedText(lang, 'تغيير كلمة المرور', 'Change password')}</h2>
                   {[
-                    ['current_password', lang === 'ar' ? 'كلمة المرور الحالية' : 'Current password', 'current-password'],
-                    ['new_password', lang === 'ar' ? 'كلمة المرور الجديدة (8 أحرف على الأقل)' : 'New password (at least 8 characters)', 'new-password'],
-                    ['confirm_password', lang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new password', 'new-password']
+                    ['current_password', localizedText(lang, 'كلمة المرور الحالية', 'Current password'), 'current-password'],
+                    ['new_password', localizedText(lang, 'كلمة المرور الجديدة (8 أحرف على الأقل)', 'New password (at least 8 characters)'), 'new-password'],
+                    ['confirm_password', localizedText(lang, 'تأكيد كلمة المرور الجديدة', 'Confirm new password'), 'new-password']
                   ].map(([field, label, autocomplete]) => (
                     <label key={field} style={{ display: 'block', marginBottom: '12px', fontSize: '12px', fontWeight: 700 }}>
                       {label}
@@ -567,10 +588,10 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                   {passwordError && <p role="alert" style={{ color: '#b91c1c', fontSize: '12px', fontWeight: 700 }}>{passwordError}</p>}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
                     <button type="button" disabled={authBusy} onClick={() => setPasswordModalOpen(false)} style={{ padding: '10px 12px', border: '1px solid var(--border-subtle)', borderRadius: '9px', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                      {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                      {localizedText(lang, 'إلغاء', 'Cancel')}
                     </button>
                     <button type="submit" disabled={authBusy} style={{ padding: '10px 12px', border: 0, borderRadius: '9px', background: 'var(--algeria-green)', color: '#fff', fontWeight: 700, cursor: authBusy ? 'wait' : 'pointer' }}>
-                      {authBusy ? '…' : (lang === 'ar' ? 'حفظ كلمة المرور' : 'Save password')}
+                      {authBusy ? '…' : (localizedText(lang, 'حفظ كلمة المرور', 'Save password'))}
                     </button>
                   </div>
                 </form>
@@ -598,7 +619,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                 {/* Dealer Info Bar */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>{lang === 'ar' ? 'مرحباً بك' : 'Welcome back'}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>{localizedText(lang, 'مرحباً بك', 'Welcome back')}</span>
                     <strong style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{dealer.full_name}</strong>
                     <div style={{ fontSize: '11px', color: 'var(--algeria-green)', fontWeight: '700' }}>
                       {dealer.business_name} • {dealer.wilaya}
@@ -613,14 +634,14 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                           onClick={() => { setPasswordError(''); setPasswordFields({ current_password: '', new_password: '', confirm_password: '' }); setPasswordModalOpen(true); }}
                           style={{ padding: '7px 9px', border: '1px solid var(--border-subtle)', borderRadius: '9px', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}
                         >
-                          {lang === 'ar' ? 'تغيير كلمة المرور' : 'Change password'}
+                          {localizedText(lang, 'تغيير كلمة المرور', 'Change password')}
                         </button>
                         <button
                           type="button"
                           onClick={handleDealerLogout}
                           style={{ padding: '7px 9px', border: '1px solid rgba(210,16,52,.25)', borderRadius: '9px', background: 'var(--bg-surface)', color: '#d21034', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}
                         >
-                          {lang === 'ar' ? 'خروج' : 'Log out'}
+                          {localizedText(lang, 'خروج', 'Log out')}
                         </button>
                       </>
                     )}
@@ -647,20 +668,20 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: '700', color: '#ffffff' }}>
                     <span style={{ color: '#ffffff', opacity: 0.95, letterSpacing: '0.3px' }}>{t.walletBalance}</span>
                     <span style={{ backgroundColor: 'rgba(255,255,255,0.25)', color: '#ffffff', padding: '2px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: '800' }}>
-                      {lang === 'ar' ? 'نشط' : 'Active'}
+                      {localizedText(lang, 'نشط', 'Active')}
                     </span>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '8px 0' }}>
                     <span style={{ fontSize: '28px', fontWeight: '900', fontFamily: 'monospace', color: '#ffffff', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-                      {parseFloat(dealer.wallet_balance || 0).toLocaleString()}
+                      {parseFloat(dealer.wallet_balance || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')}
                     </span>
                     <span style={{ fontSize: '14px', fontWeight: '800', color: '#fef08a', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{currencyLabel}</span>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.25)', fontSize: '11px', color: '#ffffff' }}>
                     <span style={{ color: '#ffffff', opacity: 0.95 }}>
-                      {lang === 'ar' ? 'سقف الدين:' : 'Credit:'} <strong style={{ color: '#ffffff' }}>{parseFloat(dealer.credit_limit || 0).toLocaleString()} {currencyLabel}</strong>
+                      {localizedText(lang, 'سقف الدين:', 'Credit:')} <strong style={{ color: '#ffffff' }}>{parseFloat(dealer.credit_limit || 0).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</strong>
                     </span>
 
                     <button
@@ -690,7 +711,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                 {/* Instant Commission Discounts Ticker */}
                 <div style={{ padding: '10px', borderRadius: '12px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--algeria-green)', display: 'block', marginBottom: '6px' }}>
-                    {lang === 'ar' ? '⚡ نسب الخصم المقتطعة تلقائياً للمحل:' : '⚡ Live Commission Discounts:'}
+                    {localizedText(lang, '⚡ نسب الخصم المقتطعة تلقائياً للمحل:', '⚡ Live Commission Discounts:')}
                   </span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', textAlign: 'center', fontSize: '11px' }}>
                     {operators.map(op => (
@@ -836,7 +857,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                       <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#475569', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <MessageSquare style={{ width: '20px', height: '20px' }} />
                       </div>
-                      <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-primary)' }}>{lang === 'ar' ? 'الشكاوى' : 'Disputes'}</span>
+                      <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-primary)' }}>{localizedText(lang, 'الشكاوى', 'Disputes')}</span>
                     </button>
                   </div>
                 </div>
@@ -845,10 +866,10 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-primary)' }}>
-                      {lang === 'ar' ? 'آخر العمليات مع العمولات' : 'Recent Recharges'}
+                      {localizedText(lang, 'آخر العمليات مع العمولات', 'Recent Recharges')}
                     </span>
                     <button onClick={() => setCurrentScreen('history')} style={{ fontSize: '11px', color: 'var(--algeria-green)', fontWeight: '700', background: 'none', border: 'none', cursor: 'pointer' }}>
-                      {lang === 'ar' ? 'عرض الكل' : 'View All'}
+                      {localizedText(lang, 'عرض الكل', 'View All')}
                     </button>
                   </div>
 
@@ -1012,12 +1033,12 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>{t.faceValue}:</span>
                       <bdi dir="ltr" style={{ fontFamily: 'monospace', fontWeight: '800' }}>
-                        {faceVal.toLocaleString()} {currencyLabel}
+                        {faceVal.toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}
                       </bdi>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--algeria-green)', fontWeight: '700' }}>
                       <span>
-                        {lang === 'ar' ? 'نسبة عمولتك (' : 'Your commission ('}
+                        {localizedText(lang, 'نسبة عمولتك (', 'Your commission (')}
                         <bdi dir="ltr">{commPct}%</bdi>
                         {lang === 'ar' ? '):' : '):'}
                       </span>
@@ -1085,7 +1106,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                   <button onClick={() => setCurrentScreen('home')} style={{ padding: '6px', borderRadius: '8px', background: 'none', border: '1px solid var(--border-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {lang === 'ar' ? <ArrowRight style={{ width: '16px', height: '16px' }} /> : <ArrowLeft style={{ width: '16px', height: '16px' }} />}
                   </button>
-                  <strong style={{ fontSize: '15px' }}>{lang === 'ar' ? 'سجل العمليات والشكاوى' : 'History & Disputes'}</strong>
+                  <strong style={{ fontSize: '15px' }}>{localizedText(lang, 'سجل العمليات والشكاوى', 'History & Disputes')}</strong>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1096,13 +1117,13 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                         <span className={`badge ${
                           item.status === 'success' ? 'badge-success' : item.status === 'pending' ? 'badge-pending' : 'badge-failed'
                         }`}>
-                          {item.status}
+                          {localizedStatus(lang, item.status)}
                         </span>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        <span>{lang === 'ar' ? 'القيمة:' : 'Face Value:'} <strong>{parseFloat(item.face_value)} {currencyLabel}</strong></span>
-                        <span style={{ color: 'var(--algeria-green)', fontWeight: '700' }}>{lang === 'ar' ? 'المخصوم:' : 'Debited:'} {parseFloat(item.net_debited)} {currencyLabel}</span>
+                        <span>{localizedText(lang, 'القيمة:', 'Face Value:')} <strong>{parseFloat(item.face_value)} {currencyLabel}</strong></span>
+                        <span style={{ color: 'var(--algeria-green)', fontWeight: '700' }}>{localizedText(lang, 'المخصوم:', 'Debited:')} {parseFloat(item.net_debited)} {currencyLabel}</span>
                       </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)', fontSize: '11px' }}>
@@ -1136,7 +1157,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                 <form onSubmit={handleTopupSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', textAlign: lang === 'ar' ? 'right' : 'left' }}>
-                      {lang === 'ar' ? 'المبلغ المطلوب شحنه (د.ج)' : 'Amount to Request (DZD)'}
+                      {localizedText(lang, 'المبلغ المطلوب شحنه (د.ج)', 'Amount to Request (DZD)')}
                     </label>
                     <input
                       type="number"
@@ -1160,7 +1181,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
 
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', textAlign: lang === 'ar' ? 'right' : 'left' }}>
-                      {lang === 'ar' ? 'طريقة الدفع' : 'Payment Method'}
+                      {localizedText(lang, 'طريقة الدفع', 'Payment Method')}
                     </label>
                     <select
                       value={topupMethod}
@@ -1168,15 +1189,15 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
                       className="filter-input"
                       style={{ width: '100%', textAlign: lang === 'ar' ? 'right' : 'left' }}
                     >
-                      <option value="cash_collection">{lang === 'ar' ? 'دفع نقدي للمسؤول (Cash Collection)' : 'Cash Collection'}</option>
-                      <option value="baridimob">{lang === 'ar' ? 'بريدي موب (BaridiMob)' : 'BaridiMob'}</option>
-                      <option value="bank_ccp">{lang === 'ar' ? 'حوالة بريدية CCP' : 'CCP Transfer'}</option>
+                      <option value="cash_collection">{localizedText(lang, 'دفع نقدي للمسؤول (Cash Collection)', 'Cash Collection')}</option>
+                      <option value="baridimob">{localizedText(lang, 'بريدي موب (BaridiMob)', 'BaridiMob')}</option>
+                      <option value="bank_ccp">{localizedText(lang, 'حوالة بريدية CCP', 'CCP Transfer')}</option>
                     </select>
                   </div>
 
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', textAlign: lang === 'ar' ? 'right' : 'left' }}>
-                      {lang === 'ar' ? 'رقم الإيصال أو المرجع' : 'Receipt / Reference No.'}
+                      {localizedText(lang, 'رقم الإيصال أو المرجع', 'Receipt / Reference No.')}
                     </label>
                     <input
                       type="text"
@@ -1252,7 +1273,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <MonitorCheck style={{ width: '22px', height: '22px', color: 'var(--algeria-green)' }} />
               <h3 style={{ fontSize: '17px', fontWeight: '800', margin: 0, color: 'var(--text-primary)' }}>
-                {lang === 'ar' ? 'لوحة نقطة البيع للموزع واختبار بوابات الربط (POS Console)' : 'Dealer POS Terminal & API Gateway'}
+                {localizedText(lang, 'لوحة نقطة البيع للموزع واختبار بوابات الربط (POS Console)', 'Dealer POS Terminal & API Gateway')}
               </h3>
             </div>
             <span style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '8px', backgroundColor: 'var(--algeria-green-light)', color: 'var(--algeria-green)', fontWeight: '800' }}>
@@ -1264,12 +1285,12 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
             <div style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
               <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block' }}>رصيد المحل الحالي</span>
-              <strong style={{ fontSize: '18px', fontFamily: 'monospace', color: 'var(--algeria-green)' }}>{parseFloat(dealer.wallet_balance).toLocaleString()} {currencyLabel}</strong>
+              <strong style={{ fontSize: '18px', fontFamily: 'monospace', color: 'var(--algeria-green)' }}>{parseFloat(dealer.wallet_balance).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</strong>
             </div>
 
             <div style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
               <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block' }}>السقف الائتماني الممنوح</span>
-              <strong style={{ fontSize: '18px', fontFamily: 'monospace' }}>{parseFloat(dealer.credit_limit).toLocaleString()} {currencyLabel}</strong>
+              <strong style={{ fontSize: '18px', fontFamily: 'monospace' }}>{parseFloat(dealer.credit_limit).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB')} {currencyLabel}</strong>
             </div>
 
             <div style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
@@ -1300,7 +1321,7 @@ export default function DealerMobileApp({ t, lang, theme, setLang, setTheme, onO
           {/* Quick POS Flexy Buttons */}
           <div>
             <h4 style={{ fontSize: '14px', fontWeight: '800', marginBottom: '10px', color: 'var(--text-primary)' }}>
-              {lang === 'ar' ? 'عمليات شحن نموذجية سريعة بنقرة واحدة:' : 'Quick One-Click Test Recharges:'}
+              {localizedText(lang, 'عمليات شحن نموذجية سريعة بنقرة واحدة:', 'Quick One-Click Test Recharges:')}
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
               <button

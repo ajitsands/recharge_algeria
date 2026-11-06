@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { localizedText } from '../i18n';
 import { createPortal } from 'react-dom';
 import { Globe, Moon, Sun, Smartphone, Monitor, Database, Clock, LogIn, LogOut, UserRound, X } from 'lucide-react';
 import { api } from '../api';
+import LanguageSelector from './LanguageSelector';
+import CompanyLogo from './CompanyLogo';
 
 export default function AlgerianArtHeader({ 
   currentMode, 
@@ -11,6 +14,8 @@ export default function AlgerianArtHeader({
   theme, 
   setTheme, 
   t,
+  companyName,
+  companyLogo,
   onOpenQrModal,
   currentUser,
   onLogin,
@@ -51,7 +56,8 @@ export default function AlgerianArtHeader({
   useEffect(() => {
     const update = () => {
       const now = new Date();
-      setTime(now.toLocaleTimeString(lang === 'ar' ? 'ar-DZ' : 'en-GB', { timeZone: 'Africa/Algiers' }));
+      const locale = lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB';
+      setTime(now.toLocaleTimeString(locale, { timeZone: 'Africa/Algiers' }));
     };
     update();
     const interval = setInterval(update, 1000);
@@ -78,17 +84,13 @@ export default function AlgerianArtHeader({
             justifyContent: 'center',
             boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.2)'
           }}>
-            {/* Algerian Emblem: Crescent & Star SVG */}
-            <svg viewBox="0 0 48 48" style={{ width: '30px', height: '30px' }} xmlns="http://www.w3.org/2000/svg">
-              <path d="M24 4C13 4 4 13 4 24s9 20 20 20c3.2 0 6.2-.8 8.8-2.1-1.8.7-3.7 1.1-5.8 1.1-8.8 0-16-7.2-16-16s7.2-16 16-16c2.1 0 4 .4 5.8 1.1C30.2 4.8 27.2 4 24 4z" fill="#ffffff" />
-              <polygon points="32,16 34.5,21.5 40.5,22 36,26 37.5,32 32,29 26.5,32 28,26 23.5,22 29.5,21.5" fill="#d21034" />
-            </svg>
+            <CompanyLogo logo={companyLogo} size={companyLogo ? 44 : 30} />
           </div>
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.3px', color: '#ffffff' }}>
-                {t.appName}
+                {companyName || t.appName}
               </span>
               <span style={{
                 fontSize: '11px',
@@ -182,7 +184,7 @@ export default function AlgerianArtHeader({
             <button
               id="btn-switch-mobile"
               onClick={onOpenQrModal}
-              title={lang === 'ar' ? 'مسح رمز QR لفتح التطبيق على الهاتف' : 'Scan QR to open app on mobile'}
+              title={localizedText(lang, 'مسح رمز QR لفتح التطبيق على الهاتف', 'Scan QR to open app on mobile')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -200,7 +202,7 @@ export default function AlgerianArtHeader({
               }}
             >
               <Smartphone style={{ width: '15px', height: '15px' }} />
-              <span>{lang === 'ar' ? 'تطبيق الهاتف (QR)' : 'Dealer Mobile App (QR)'}</span>
+              <span>{localizedText(lang, 'تطبيق الهاتف (QR)', 'Dealer Mobile App (QR)')}</span>
               <span style={{
                 fontSize: '10px',
                 padding: '1px 6px',
@@ -252,27 +254,21 @@ export default function AlgerianArtHeader({
             </button>
           )}
 
-          {/* Language Toggle */}
-          <button
-            id="btn-language-toggle"
-            onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              backgroundColor: 'rgba(255, 255, 255, 0.15)',
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              color: '#ffffff',
-              fontSize: '13px',
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}
-          >
-            <Globe style={{ width: '14px', height: '14px' }} />
-            <span>{lang === 'ar' ? 'English' : 'العربية'}</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Globe style={{ width: '14px', height: '14px', color: '#ffffff' }} />
+            <LanguageSelector
+              lang={lang}
+              setLang={setLang}
+              style={{
+                padding: '8px 10px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                color: '#ffffff',
+                fontSize: '13px'
+              }}
+            />
+          </div>
 
           {/* Theme Toggle */}
           <button
@@ -309,11 +305,20 @@ export default function AlgerianArtHeader({
             onSubmit={handleLogin}
             style={{ width: 'min(420px, 94vw)', display: 'flex', flexDirection: 'column', gap: '14px' }}
           >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+              <CompanyLogo logo={companyLogo} size={52} />
+              <div>
+                <strong style={{ display: 'block', color: 'var(--text-primary)', fontSize: '17px' }}>
+                  {companyName || t.appName}
+                </strong>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{t.appSubtitle}</span>
+              </div>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '20px', fontWeight: 800 }}>{t.login}</h2>
               <button
                 type="button"
-                aria-label={lang === 'ar' ? 'إغلاق' : 'Close'}
+                aria-label={localizedText(lang, 'إغلاق', 'Close')}
                 onClick={() => setLoginOpen(false)}
                 disabled={loginSubmitting}
                 style={{ border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}

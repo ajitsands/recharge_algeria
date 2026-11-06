@@ -25,19 +25,20 @@ export function formatDateTime(value, format = 'd/m/Y H:i', lang = 'en') {
     return String(value);
   }
 
-  const weekday = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-DZ' : 'en-GB', {
+  const locale = lang === 'ar' ? 'ar-DZ' : lang === 'fr' ? 'fr-FR' : 'en-GB';
+  const weekday = new Intl.DateTimeFormat(locale, {
     weekday: 'long',
     timeZone: 'UTC'
   }).format(date);
-  const shortWeekday = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-DZ' : 'en-GB', {
+  const shortWeekday = new Intl.DateTimeFormat(locale, {
     weekday: 'short',
     timeZone: 'UTC'
   }).format(date);
-  const monthName = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-DZ' : 'en-GB', {
+  const monthName = new Intl.DateTimeFormat(locale, {
     month: 'long',
     timeZone: 'UTC'
   }).format(date);
-  const shortMonthName = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-DZ' : 'en-GB', {
+  const shortMonthName = new Intl.DateTimeFormat(locale, {
     month: 'short',
     timeZone: 'UTC'
   }).format(date);

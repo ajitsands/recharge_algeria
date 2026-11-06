@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { localizedText } from '../i18n';
 import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react';
 
 export default function DataTable({
@@ -122,7 +123,7 @@ export default function DataTable({
             type="text"
             value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            placeholder={searchPlaceholder || (lang === 'ar' ? 'بحث سريع وفوري في كافة الحقول...' : 'Fast search across all columns...')}
+            placeholder={searchPlaceholder || (localizedText(lang, 'بحث سريع وفوري في كافة الحقول...', 'Fast search across all columns...'))}
             className="filter-input"
             style={{
               width: '100%',
@@ -155,7 +156,7 @@ export default function DataTable({
         {/* Page Size Selector & Total count badge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-            {lang === 'ar' ? 'عرض:' : 'Show:'}
+            {localizedText(lang, 'عرض:', 'Show:')}
           </span>
           <select
             value={pageSize}
@@ -173,7 +174,7 @@ export default function DataTable({
           >
             {pageSizeOptions.map(opt => (
               <option key={opt} value={opt}>
-                {opt} {lang === 'ar' ? 'سجلات' : 'rows'}
+                {opt} {localizedText(lang, 'سجلات', 'rows')}
               </option>
             ))}
           </select>
@@ -186,7 +187,7 @@ export default function DataTable({
             fontSize: '11.5px',
             fontWeight: '800'
           }}>
-            {totalRecords} {lang === 'ar' ? 'سجل' : 'records'}
+            {totalRecords} {localizedText(lang, 'سجل', 'records')}
           </span>
         </div>
       </div>
@@ -256,7 +257,7 @@ export default function DataTable({
             ) : (
               <tr>
                 <td colSpan={columns.length} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  {emptyMessage || (lang === 'ar' ? 'لا توجد بيانات مطابقة للبحث' : 'No matching records found')}
+                  {emptyMessage || (localizedText(lang, 'لا توجد بيانات مطابقة للبحث', 'No matching records found'))}
                 </td>
               </tr>
             )}
@@ -284,7 +285,7 @@ export default function DataTable({
             </span>
           ) : (
             <span>
-              Showing <strong style={{ color: 'var(--text-primary)' }}>{startIndex}</strong> to <strong style={{ color: 'var(--text-primary)' }}>{endIndex}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{totalRecords}</strong> entries
+              {localizedText(lang, 'عرض', 'Showing')} <strong style={{ color: 'var(--text-primary)' }}>{startIndex}</strong> {localizedText(lang, 'إلى', 'to')} <strong style={{ color: 'var(--text-primary)' }}>{endIndex}</strong> {localizedText(lang, 'من أصل', 'of')} <strong style={{ color: 'var(--text-primary)' }}>{totalRecords}</strong> {localizedText(lang, 'سجل', 'entries')}
             </span>
           )}
         </div>
@@ -305,7 +306,7 @@ export default function DataTable({
                 display: 'flex',
                 alignItems: 'center'
               }}
-              title="First Page"
+              title={localizedText(lang, 'الصفحة الأولى', 'First Page')}
             >
               {lang === 'ar' ? <ChevronsRight style={{ width: '14px', height: '14px' }} /> : <ChevronsLeft style={{ width: '14px', height: '14px' }} />}
             </button>
@@ -327,7 +328,7 @@ export default function DataTable({
               }}
             >
               {lang === 'ar' ? <ChevronRight style={{ width: '14px', height: '14px' }} /> : <ChevronLeft style={{ width: '14px', height: '14px' }} />}
-              <span>{lang === 'ar' ? 'السابق' : 'Prev'}</span>
+              <span>{localizedText(lang, 'السابق', 'Prev')}</span>
             </button>
 
             {/* Page number indicators */}
@@ -359,7 +360,7 @@ export default function DataTable({
                 fontWeight: '700'
               }}
             >
-              <span>{lang === 'ar' ? 'التالي' : 'Next'}</span>
+              <span>{localizedText(lang, 'التالي', 'Next')}</span>
               {lang === 'ar' ? <ChevronLeft style={{ width: '14px', height: '14px' }} /> : <ChevronRight style={{ width: '14px', height: '14px' }} />}
             </button>
 
@@ -376,7 +377,7 @@ export default function DataTable({
                 display: 'flex',
                 alignItems: 'center'
               }}
-              title="Last Page"
+              title={localizedText(lang, 'الصفحة الأخيرة', 'Last Page')}
             >
               {lang === 'ar' ? <ChevronsLeft style={{ width: '14px', height: '14px' }} /> : <ChevronsRight style={{ width: '14px', height: '14px' }} />}
             </button>

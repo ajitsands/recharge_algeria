@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { localizedText } from './i18n';
 import AlgerianArtHeader from './components/AlgerianArtHeader';
 import AdminPortal from './components/AdminPortal';
 import DealerMobileApp from './components/DealerMobileApp';
@@ -6,6 +7,7 @@ import CollectionAgentWebApp from './components/CollectionAgentWebApp';
 import MobileAccessQRModal from './components/MobileAccessQRModal';
 import PoweredByProfileModal from './components/PoweredByProfileModal';
 import { translations } from './i18n';
+import { api } from './api';
 
 const AUTH_SESSION_KEY = 'razik_auth_session';
 
@@ -49,10 +51,11 @@ export default function App() {
   const [lang, setLangState] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('razik_app_lang');
-      if (saved === 'ar' || saved === 'en') return saved;
+      if (saved === 'ar' || saved === 'en' || saved === 'fr') return saved;
     }
-    return 'ar';
+    return 'en';
   });
+  const [branding, setBranding] = useState({ company_name: '', company_logo: '' });
 
   const [theme, setThemeState] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -65,6 +68,37 @@ export default function App() {
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [companyProfileOpen, setCompanyProfileOpen] = useState(false);
   const [authSession, setAuthSession] = useState(readAuthSession);
+
+  useEffect(() => {
+    let active = true;
+    api.getSettings()
+      .then((result) => {
+        if (!active) return;
+        if (!result.success || !result.settings) {
+          console.error('Could not load company branding settings:', result.error || 'Invalid settings response');
+          return;
+        }
+        setBranding({
+          company_name: result.settings.company_name || '',
+          company_logo: result.settings.company_logo || ''
+        });
+      })
+      .catch((error) => {
+        console.error('Could not load company branding settings:', error);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleBrandingChange = (settings) => {
+    setBranding((previous) => {
+      const company_name = settings.company_name || '';
+      const company_logo = settings.company_logo || '';
+      if (previous.company_name === company_name && previous.company_logo === company_logo) return previous;
+      return { company_name, company_logo };
+    });
+  };
 
   const handleLogin = (session) => {
     localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
@@ -106,12 +140,17 @@ export default function App() {
   };
 
   const t = translations[lang] || translations.ar;
+  const companyName = branding.company_name || t.appName;
 
   useEffect(() => {
     document.documentElement.dir = t.dir;
     document.documentElement.lang = lang;
     document.documentElement.setAttribute('data-theme', theme);
   }, [lang, theme, t.dir]);
+
+  useEffect(() => {
+    document.title = `${companyName} | ${t.appSubtitle}`;
+  }, [companyName, t.appSubtitle]);
 
   // If accessed directly on smartphone or preview link (?mode=mobile)
   if (isDirectMobile) {
@@ -127,7 +166,13 @@ export default function App() {
         margin: 0
       }}>
         {isCollectionAgentMode ? (
-          <CollectionAgentWebApp lang={lang} onBack={() => openMobileMode('mobile')} />
+          <CollectionAgentWebApp
+            lang={lang}
+            setLang={setLang}
+            companyName={companyName}
+            companyLogo={branding.company_logo}
+            onBack={() => openMobileMode('mobile')}
+          />
         ) : (
           <DealerMobileApp
             t={t}
@@ -137,6 +182,8 @@ export default function App() {
             setTheme={setTheme}
             onOpenQrModal={() => setQrModalOpen(true)}
             isDirectMobile={true}
+            companyName={companyName}
+            companyLogo={branding.company_logo}
           />
         )}
 
@@ -160,6 +207,8 @@ export default function App() {
         theme={theme}
         setTheme={setTheme}
         t={t}
+        companyName={companyName}
+        companyLogo={branding.company_logo}
         onOpenQrModal={() => setQrModalOpen(true)}
         currentUser={authSession?.user || null}
         onLogin={handleLogin}
@@ -176,6 +225,7 @@ export default function App() {
             onOpenQrModal={() => setQrModalOpen(true)}
             currentUser={authSession?.user || null}
             authToken={authSession?.token || null}
+            onBrandingChange={handleBrandingChange}
           />
         ) : (
           <div style={{ width: '100%', flex: 1, padding: '24px 32px' }}>
@@ -187,6 +237,8 @@ export default function App() {
               setTheme={setTheme}
               onOpenQrModal={() => setQrModalOpen(true)}
               isDirectMobile={false}
+              companyName={companyName}
+              companyLogo={branding.company_logo}
             />
           </div>
         )}
@@ -207,9 +259,9 @@ export default function App() {
         gap: '12px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>© {new Date().getFullYear()} {lang === 'ar' ? 'رازيق تليكوم (الجزائر)' : 'Razik Telecom (Algiers, Algeria)'}</span>
+          <span>© {new Date().getFullYear()} {companyName}</span>
           <span>•</span>
-          <span>{lang === 'ar' ? 'منصة توزيع رصيد الهاتف النقال والخدمات الرقمية للمتعاملين الثلاثة' : 'Telecom Credit & Multi-Service Distribution Platform'}</span>
+          <span>{localizedText(lang, 'منصة توزيع رصيد الهاتف النقال والخدمات الرقمية للمتعاملين الثلاثة', 'Telecom Credit & Multi-Service Distribution Platform')}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
@@ -224,7 +276,7 @@ export default function App() {
               textDecoration: 'underline'
             }}
           >
-            {lang === 'ar' ? '📱 فتح تطبيق الهاتف (QR Scan)' : '📱 Open Mobile App (QR Scan)'}
+            {localizedText(lang, '📱 فتح تطبيق الهاتف (QR Scan)', '📱 Open Mobile App (QR Scan)')}
           </button>
           <span>•</span>
           <button

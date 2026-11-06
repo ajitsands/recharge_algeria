@@ -1,10 +1,14 @@
 # Commercial & Technical Project Proposal
 
+![SaNDS Lab Middle East W.L.L Logo](Logo/SaNDSLab-LogoNewUpdated%20copy.png)
+
 **Project:** Razik Telecom Next-Generation Telecom Credit Distribution ERP & Multi-Channel B2B POS Platform  
 **Document Code:** PROP-RAZIK-2026-V1  
 **Date:** October 28, 2026  
 **Client:** Razik Telecom (Algiers, Algeria)  
-**Prepared By:** SaNDS Lab Middle East W.L.L  
+**Prepared By:** SaNDS Lab Middle East W.L.L (CR: 181123-1, Kingdom of Bahrain)  
+**Application & Mobile Branding:** Official **SaNDS Lab Middle East W.L.L** branding & logo integrated in both the **Web Application** and **Mobile Apps**  
+**Total Turnkey Project Cost:** **€11,500 (11,500 EUR)** (Eleven Thousand Five Hundred Euros)  
 **Reference Document:** `docs/Razik_Telecom_Detailed_ERP_Scoping_Report_v0.1.pdf`  
 **Classification:** Commercial-in-Confidence  
 
@@ -157,10 +161,11 @@ Based on the detailed scoping baseline, the system comprises six (6) integrated 
   * *Critical Lockout:* Prevents orders when operator reserves cannot clear request, redirecting dealer with clear notification.
 * **Discrepancy Reconciliation Engine:** End-of-day comparison between internal transactional logs and operator consumption statements.
 
-### Pillar 5: Bilingual User Experience & Multi-Channel Delivery
+### Pillar 5: Bilingual User Experience, Multi-Channel Delivery & Platform Branding
 * **Native Arabic (RTL) & French/English (LTR):** Complete contextual localization across all screens, receipts, and alert messages.
 * **High-Density Web Operations Console:** Tailored for 1920px widescreen desktop monitors in distribution offices, featuring quick KPI analytics, real-time transaction streams, and one-click actions.
 * **Dealer Android Application:** Lightweight APK optimized for low-bandwidth cellular connections across Algerian Wilayas, featuring quick-action tiles and thermal Bluetooth receipt printing support.
+* **SaNDS Lab Branding in Web Application & Mobile Apps:** Official **SaNDS Lab Middle East W.L.L** branding logo and engineering attribution (*"Powered by SaNDS Lab Middle East W.L.L"*) will be displayed inside both the **Web Application** (Admin Operations Console & Web POS Portal) and the **Mobile Apps** (Dealer POS & Field Collection Mobile Applications) alongside Razik Telecom's primary branding.
 
 ### Pillar 6: Future Foundation (Bill Utilities & E-Commerce Ready)
 * Architectural schema reservations for **Sonelgaz** (Electricity/Gas reference bill payments) and **ADE** (Algérienne Des Eaux water payments).
@@ -296,16 +301,18 @@ gantt
 
 ## 10. Commercial Investment & Milestone Payment Structure
 
-*Note: Indicative project milestone quotation tailored to the scoped deliverables (Phases 1 through 5).*
+**Total Fixed-Price Turnkey Project Investment: €11,500 (11,500 EUR)** *(Eleven Thousand Five Hundred Euros — All-Inclusive Turnkey Delivery covering Phases 1 through 5 and 90-Day Post-Launch Warranty).*
 
-| Milestone | Milestone Deliverables Description | Target Completion | Invoicing Share |
-| :---: | :--- | :---: | :---: |
-| **M1: Contract & Inception** | Formal project kickoff, scoping sign-off, architecture lock, and staging server setup. | Week 1 | **20%** |
-| **M2: Core ERP & Transaction Engine** | Functional REST API, complete sub-ledger, cash collection register, and admin web console. | Week 4 | **30%** |
-| **M3: Mobile Application & Operator Integration** | Delivery of Android APK, operator routing gateway, thermal printing integration, and end-to-end sandbox testing. | Week 8 | **25%** |
-| **M4: Pilot Deployment & Acceptance** | Successful Algiers kiosk pilot (minimum 1,000 live recharges without discrepancy), UAT sign-off. | Week 10 | **15%** |
-| **M5: Production Launch & Handover** | Live deployment on production server, staff training, documentation, and warranty commencement. | Week 12 | **10%** |
-| **Total** | **Turnkey Platform Delivery** | **12 Weeks** | **100%** |
+* **Application & Mobile Apps Branding Clause:** Official **SaNDS Lab Middle East W.L.L** branding logo and *"Powered by SaNDS Lab Middle East W.L.L"* attribution will be included in both the **Web Application** and the **Mobile Apps**.
+
+| Milestone | Milestone Deliverables Description | Target Completion | Invoicing Share | Amount (EUR) |
+| :---: | :--- | :---: | :---: | :---: |
+| **M1: Contract & Inception** | Formal project kickoff, scoping sign-off, architecture lock, and staging server setup. | Week 1 | **20%** | **€2,300 (2,300 EUR)** |
+| **M2: Core ERP & Transaction Engine** | Functional REST API, complete sub-ledger, cash collection register, and admin web console. | Week 4 | **30%** | **€3,450 (3,450 EUR)** |
+| **M3: Mobile Application & Operator Integration** | Delivery of Android APK, operator routing gateway, thermal printing integration, and end-to-end sandbox testing. | Week 8 | **25%** | **€2,875 (2,875 EUR)** |
+| **M4: Pilot Deployment & Acceptance** | Successful Algiers kiosk pilot (minimum 1,000 live recharges without discrepancy), UAT sign-off. | Week 10 | **15%** | **€1,725 (1,725 EUR)** |
+| **M5: Production Launch & Handover** | Live deployment on production server, staff training, documentation, and warranty commencement. | Week 12 | **10%** | **€1,150 (1,150 EUR)** |
+| **Total** | **Turnkey Platform Delivery (All-Inclusive)** | **12 Weeks** | **100%** | **€11,500 (11,500 EUR)** |
 
 ### Post-Launch Service & Support Package (Included & Extended)
 * **Standard Warranty (90 Days Included):** Full defect correction, performance monitoring, and critical security patch updates.

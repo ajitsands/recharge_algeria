@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { localizedText } from '../i18n';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Smartphone, Copy, Check, ExternalLink, Wifi, RefreshCw, ShieldCheck, Globe, Server, Sparkles } from 'lucide-react';
 
@@ -79,10 +80,10 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
             </div>
             <div>
               <h3 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: 'var(--text-primary)' }}>
-                {lang === 'ar' ? 'مسح QR للفتح على الهاتف الذكي' : 'Scan QR for Mobile Smartphone Access'}
+                {localizedText(lang, 'مسح QR للفتح على الهاتف الذكي', 'Scan QR for Mobile Smartphone Access')}
               </h3>
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {lang === 'ar' ? 'نقطة البيع أو تطبيق المحصل عبر الهاتف' : 'Dealer POS or Collection Agent on mobile'}
+                {localizedText(lang, 'نقطة البيع أو تطبيق المحصل عبر الهاتف', 'Dealer POS or Collection Agent on mobile')}
               </span>
             </div>
           </div>
@@ -112,8 +113,8 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
           marginBottom: '16px'
         }}>
           {[
-            { id: 'pos', label: lang === 'ar' ? 'نقطة البيع' : 'Dealer POS' },
-            { id: 'agent', label: lang === 'ar' ? 'تطبيق المحصل' : 'Collection Agent' }
+            { id: 'pos', label: localizedText(lang, 'نقطة البيع', 'Dealer POS') },
+            { id: 'agent', label: localizedText(lang, 'تطبيق المحصل', 'Collection Agent') }
           ].map((item) => (
             <button
               key={item.id}
@@ -166,7 +167,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
             }}
           >
             <Globe style={{ width: '15px', height: '15px' }} />
-            <span>{lang === 'ar' ? 'سيرفر ودومين رسمي (Production)' : 'Live Server / Domain'}</span>
+            <span>{localizedText(lang, 'سيرفر ودومين رسمي (Production)', 'Live Server / Domain')}</span>
           </button>
 
           <button
@@ -189,7 +190,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
             }}
           >
             <Wifi style={{ width: '15px', height: '15px' }} />
-            <span>{lang === 'ar' ? 'شبكة Wi-Fi محلية (Local Test)' : 'Local Wi-Fi Testing'}</span>
+            <span>{localizedText(lang, 'شبكة Wi-Fi محلية (Local Test)', 'Local Wi-Fi Testing')}</span>
           </button>
         </div>
 
@@ -214,13 +215,9 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
           )}
           <span>
             {tabMode === 'server' ? (
-              lang === 'ar'
-                ? 'عند نشر المنصة على سيرفرك (VPS / Cloud) برابط رسمي، يستطيع أي موزع في الجزائر مسح الرمز مباشرة من أي هاتف عبر شبكة 4G (موبيليس، جازي، أوريدو) أو Wi-Fi دون الحاجة لأي إعدادات إضافية.'
-                : 'When published on your live server / cloud domain, any dealer across Algeria can scan this QR code via 4G mobile data or Wi-Fi to access the POS app directly from anywhere.'
+              localizedText(lang, 'عند نشر المنصة على سيرفرك (VPS / Cloud) برابط رسمي، يستطيع أي موزع في الجزائر مسح الرمز مباشرة من أي هاتف عبر شبكة 4G (موبيليس، جازي، أوريدو) أو Wi-Fi دون الحاجة لأي إعدادات إضافية.', 'When published on your live server / cloud domain, any dealer across Algeria can scan this QR code via 4G mobile data or Wi-Fi to access the POS app directly from anywhere.')
             ) : (
-              lang === 'ar'
-                ? 'للتجربة المحلية: تأكد من اتصال هاتفك بنفس شبكة Wi-Fi المتصل بها هذا الكمبيوتر، ثم وجّه كاميرا الهاتف نحو الرمز.'
-                : 'For local testing: Ensure your phone is connected to the same Wi-Fi network, then point your phone camera at the QR code.'
+              localizedText(lang, 'للتجربة المحلية: تأكد من اتصال هاتفك بنفس شبكة Wi-Fi المتصل بها هذا الكمبيوتر، ثم وجّه كاميرا الهاتف نحو الرمز.', 'For local testing: Ensure your phone is connected to the same Wi-Fi network, then point your phone camera at the QR code.')
             )}
           </span>
         </div>
@@ -261,7 +258,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
                 textAlign: 'center',
                 fontSize: '13px'
               }}>
-                {lang === 'ar' ? 'أدخل عنوان IP المحلي لإنشاء الرمز' : 'Enter this computer’s local IP to create the QR code.'}
+                {localizedText(lang, 'أدخل عنوان IP المحلي لإنشاء الرمز', 'Enter this computer’s local IP to create the QR code.')}
               </div>
             )}
           </div>
@@ -278,8 +275,8 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
             <ShieldCheck style={{ width: '16px', height: '16px' }} />
             <span>
               {tabMode === 'server'
-                ? (lang === 'ar' ? 'رابط السيرفر الرسمي المؤمّن بشهادة SSL (HTTPS)' : 'Secured Production HTTPS Mobile Endpoint')
-                : (lang === 'ar' ? 'منصة رازيق تليكوم مشفرة ومؤمنة بالكامل' : 'Razik Telecom Secured Mobile Endpoint')}
+                ? (localizedText(lang, 'رابط السيرفر الرسمي المؤمّن بشهادة SSL (HTTPS)', 'Secured Production HTTPS Mobile Endpoint'))
+                : (localizedText(lang, 'منصة رازيق تليكوم مشفرة ومؤمنة بالكامل', 'Razik Telecom Secured Mobile Endpoint'))}
             </span>
           </div>
         </div>
@@ -289,10 +286,10 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
           <div style={{ marginBottom: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-                {lang === 'ar' ? 'الدومين أو رابط السيرفر (Domain / Server Host):' : 'Domain / Server Host:'}
+                {localizedText(lang, 'الدومين أو رابط السيرفر (Domain / Server Host):', 'Domain / Server Host:')}
               </label>
               <span style={{ fontSize: '10.5px', color: 'var(--algeria-green)', fontWeight: '700' }}>
-                {lang === 'ar' ? 'يتغير الرمز تلقائياً' : 'Auto-updates QR'}
+                {localizedText(lang, 'يتغير الرمز تلقائياً', 'Auto-updates QR')}
               </span>
             </div>
 
@@ -345,20 +342,22 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
         ) : (
           <div style={{ marginBottom: '14px' }}>
             <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-              {lang === 'ar' ? 'عنوان الشبكة المحلية (Local IP):' : 'Local Network Address:'}
+              {localizedText(lang, 'عنوان الشبكة المحلية (Local IP):', 'Local Network Address:')}
             </label>
             <input
               type="text"
               value={customIp}
               onChange={(event) => setCustomIp(event.target.value)}
-              placeholder={lang === 'ar' ? 'مثال: 192.168.8.11' : 'e.g. 192.168.8.11'}
+              placeholder={localizedText(lang, 'مثال: 192.168.8.11', 'e.g. 192.168.8.11')}
               className="filter-input"
               style={{ width: '100%', fontSize: '13px', fontFamily: 'monospace', direction: 'ltr' }}
             />
             <span style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
               {lang === 'ar'
                 ? `استخدم عنوان IPv4 لهذا الكمبيوتر. يجب اتصال الهاتف بنفس شبكة Wi-Fi والمنفذ ${port} متاحاً.`
-                : `Enter this computer’s IPv4 address. Connect the phone to the same Wi-Fi; port ${port} must be allowed.`}
+                : lang === 'fr'
+                  ? `Saisissez l’adresse IPv4 de cet ordinateur. Connectez le téléphone au même Wi-Fi ; le port ${port} doit être autorisé.`
+                  : `Enter this computer’s IPv4 address. Connect the phone to the same Wi-Fi; port ${port} must be allowed.`}
             </span>
           </div>
         )}
@@ -408,7 +407,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
             }}
           >
             {copied ? <Check style={{ width: '13px', height: '13px' }} /> : <Copy style={{ width: '13px', height: '13px' }} />}
-            <span>{copied ? (lang === 'ar' ? 'تم النسخ!' : 'Copied!') : (lang === 'ar' ? 'نسخ الرابط' : 'Copy Link')}</span>
+            <span>{copied ? (localizedText(lang, 'تم النسخ!', 'Copied!')) : (localizedText(lang, 'نسخ الرابط', 'Copy Link'))}</span>
           </button>
         </div>
 
@@ -435,7 +434,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
             }}
           >
             <ExternalLink style={{ width: '16px', height: '16px' }} />
-            <span>{lang === 'ar' ? 'فتح واجهة الهاتف في نافذة جديدة' : 'Open Mobile View in New Tab'}</span>
+            <span>{localizedText(lang, 'فتح واجهة الهاتف في نافذة جديدة', 'Open Mobile View in New Tab')}</span>
           </button>
 
           <button
@@ -451,7 +450,7 @@ export default function MobileAccessQRModal({ open, onClose, lang }) {
               cursor: 'pointer'
             }}
           >
-            {lang === 'ar' ? 'إغلاق' : 'Close'}
+            {localizedText(lang, 'إغلاق', 'Close')}
           </button>
         </div>
       </div>
